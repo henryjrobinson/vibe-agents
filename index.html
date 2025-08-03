@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Story Collection - AI Agents for Capturing Life Stories">
+    <title>Story Collection - AI Agents for Capturing Life Stories</title>
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://story-collection.netlify.app/">
+    <meta property="og:title" content="Story Collection - AI Agents for Capturing Life Stories">
+    <meta property="og:description" content="Share your life stories with AI - Collaborator and Memory Keeper agents help capture and organize your memories">
+    <meta property="og:site_name" content="Story Collection">
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://story-collection.netlify.app/">
+    <meta property="twitter:title" content="Story Collection - AI Agents for Capturing Life Stories">
+    <meta property="twitter:description" content="Share your life stories with AI - Collaborator and Memory Keeper agents help capture and organize your memories">
+    
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <div class="header-title">Story Collection</div>
+            <div class="header-subtitle">Sharing your life stories with AI</div>
+            <div class="header-actions">
+                <div class="agent-toggle-container">
+                    <label class="toggle-switch" title="Show/hide AI agent activity and metadata">
+                        <input type="checkbox" id="agent-metadata-toggle" checked>
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">🤖 Agent Details</span>
+                    </label>
+                    <label class="toggle-switch" title="Show/hide memory extraction display" style="margin-left: 15px;">
+                        <input type="checkbox" id="memory-display-toggle" checked>
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">🧠 Memory Keeper</span>
+                    </label>
+                    <button class="action-btn" id="new-story-btn" style="margin-left: 15px;">New Story</button>
+                    <button class="action-btn" id="export-btn" style="margin-left: 10px;">Export</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="chat-section">
+                <div class="chat-messages" id="chat-messages">
+                    <!-- Messages will be added here -->
+                </div>
+                
+                <div class="chat-input-area">
+                    <div class="typing-indicator" id="typing-indicator" style="display: none;">
+                        <span>Collaborator is thinking</span>
+                        <div class="typing-dots">
+                            <div class="typing-dot"></div>
+                            <div class="typing-dot"></div>
+                            <div class="typing-dot"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="input-container">
+                        <input type="text" class="chat-input" placeholder="Share your story..." id="chat-input">
+                        <button class="send-btn" id="send-btn">Send</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="memory-panel" id="memory-panel">
+                <div class="memory-header">
+                    <h3>Memory Keeper</h3>
+                    <div class="memory-status" id="memory-status">Ready</div>
+                </div>
+                <div class="memory-content">
+                    <div class="memory-section">
+                        <h4>People</h4>
+                        <div class="memory-items" id="memory-people">
+                            <div class="memory-placeholder">No people mentioned yet</div>
+                        </div>
+                    </div>
+                    <div class="memory-section">
+                        <h4>Dates & Times</h4>
+                        <div class="memory-items" id="memory-dates">
+                            <div class="memory-placeholder">No dates mentioned yet</div>
+                        </div>
+                    </div>
+                    <div class="memory-section">
+                        <h4>Places</h4>
+                        <div class="memory-items" id="memory-places">
+                            <div class="memory-placeholder">No places mentioned yet</div>
+                        </div>
+                    </div>
+                    <div class="memory-section">
+                        <h4>Relationships</h4>
+                        <div class="memory-items" id="memory-relationships">
+                            <div class="memory-placeholder">No relationships mentioned yet</div>
+                        </div>
+                    </div>
+                    <div class="memory-section">
+                        <h4>Events</h4>
+                        <div class="memory-items" id="memory-events">
+                            <div class="memory-placeholder">No events mentioned yet</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="tap-hint" id="tap-hint" style="display: none;">Click anywhere to continue the conversation</div>
+    
+    <!-- Welcome Modal -->
+    <div class="welcome-modal" id="welcome-modal">
+        <div class="modal-content">
+            <h2>Welcome to Story Collection</h2>
+            <p>I'm your AI Collaborator, here to help you share your life stories. Together with the Memory Keeper, we'll capture and organize your precious memories.</p>
+            <div class="modal-features">
+                <div class="feature">
+                    <span class="feature-icon">🤝</span>
+                    <div>
+                        <strong>Collaborator Agent</strong>
+                        <p>Asks thoughtful questions and guides the conversation</p>
+                    </div>
+                </div>
+                <div class="feature">
+                    <span class="feature-icon">🧠</span>
+                    <div>
+                        <strong>Memory Keeper</strong>
+                        <p>Extracts and organizes people, places, dates, and events</p>
+                    </div>
+                </div>
+            </div>
+            <button class="start-btn" id="start-story-btn">Start Sharing Your Story</button>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
