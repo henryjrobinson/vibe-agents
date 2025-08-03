@@ -148,7 +148,7 @@ Remember: You're preserving family legacy with the same care and attention the f
 // Collaborator agent endpoint
 app.post('/api/collaborator', async (req, res) => {
     try {
-        const { message, conversationHistory = [] } = req.body;
+        const { message, conversationHistory = [], model = 'claude-3-5-sonnet-20241022' } = req.body;
 
         if (!message || typeof message !== 'string') {
             return res.status(400).json({ error: 'Message is required and must be a string' });
@@ -164,7 +164,7 @@ app.post('/api/collaborator', async (req, res) => {
         ];
 
         const response = await anthropic.messages.create({
-            model: 'claude-3-5-sonnet-20241022',
+            model: model,
             max_tokens: 1000,
             system: COLLABORATOR_SYSTEM_PROMPT,
             messages: messages
@@ -190,14 +190,14 @@ app.post('/api/collaborator', async (req, res) => {
 // Memory Keeper agent endpoint
 app.post('/api/memory-keeper', async (req, res) => {
     try {
-        const { message } = req.body;
+        const { message, model = 'claude-3-5-sonnet-20241022' } = req.body;
 
         if (!message || typeof message !== 'string') {
             return res.status(400).json({ error: 'Message is required and must be a string' });
         }
 
         const response = await anthropic.messages.create({
-            model: 'claude-3-5-sonnet-20241022',
+            model: model,
             max_tokens: 500,
             system: MEMORY_KEEPER_SYSTEM_PROMPT,
             messages: [{

@@ -92,6 +92,50 @@ body {
     flex-wrap: wrap;
 }
 
+.model-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: 20px;
+}
+
+.model-selector label {
+    color: white;
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.model-dropdown {
+    padding: 6px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 14px;
+    min-width: 200px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.model-dropdown:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.model-dropdown:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
+}
+
+.model-dropdown option {
+    background: #2c3e50;
+    color: white;
+    padding: 8px;
+}
+
 .agent-toggle-container {
     display: flex;
     align-items: center;
@@ -250,6 +294,13 @@ body {
     background: linear-gradient(135deg, #e74c3c, #c0392b);
     color: white;
     border-bottom-left-radius: 8px;
+}
+
+.message.system .message-bubble {
+    background: linear-gradient(135deg, #fff3e0, #fafafa);
+    border-left: 4px solid #ff9800;
+    font-style: italic;
+    color: #666;
 }
 
 .message.user .message-bubble {

@@ -12,12 +12,14 @@ let currentSession = {
 let isTyping = false;
 let agentMetadataVisible = true;
 let memoryDisplayVisible = true;
+let selectedModel = 'claude-3-5-sonnet-20241022'; // Default model
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
     initializeToggles();
     initializeInput();
     initializeButtons();
+    initializeModelSelector();
     showWelcomeModal();
 });
 
@@ -86,6 +88,29 @@ function initializeButtons() {
     const startStoryBtn = document.getElementById('start-story-btn');
     if (startStoryBtn) {
         startStoryBtn.addEventListener('click', startStorySession);
+    }
+}
+
+/**
+ * Initialize model selector dropdown
+ */
+function initializeModelSelector() {
+    const modelSelect = document.getElementById('modelSelect');
+    if (modelSelect) {
+        // Set initial value
+        modelSelect.value = selectedModel;
+        
+        // Add change event listener
+        modelSelect.addEventListener('change', function() {
+            selectedModel = this.value;
+            console.log('Model changed to:', selectedModel);
+            
+            // Add a visual indicator that model was changed
+            addMessage('system', 'system', 
+                `Model switched to: ${this.options[this.selectedIndex].text}`,
+                { timestamp: new Date().toLocaleTimeString() }
+            );
+        });
     }
 }
 
@@ -175,7 +200,10 @@ async function processWithMemoryKeeper(message) {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ message })
+            body: JSON.stringify({ 
+                message,
+                model: selectedModel 
+            })
         });
         
         if (!response.ok) {
@@ -237,7 +265,8 @@ async function processWithCollaborator(message) {
             },
             body: JSON.stringify({ 
                 message,
-                conversationHistory 
+                conversationHistory,
+                model: selectedModel 
             })
         });
         
