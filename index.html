@@ -79,10 +79,35 @@
             </div>
             
             <div class="memory-panel" id="memory-panel">
-                <div class="memory-header">
-                    <h3>Memory Keeper</h3>
+                <div class="memory-display" id="memory-display">
+                    <h3>Extracted Memories</h3>
                     <div class="memory-status" id="memory-status">Ready</div>
+                    <div class="memory-content" id="memory-content">
+                        <p class="no-memories">No memories extracted yet. Start a conversation to see extracted information here.</p>
+                    </div>
                 </div>
+                
+                <div class="debug-panel" id="debug-panel" style="display: none;">
+                    <h3>Memory Keeper Debug</h3>
+                    <div class="debug-toggle">
+                        <button id="debug-toggle-btn" class="debug-btn">Show Debug Info</button>
+                    </div>
+                    <div class="debug-content" id="debug-content">
+                        <div class="debug-section">
+                            <h4>Input Message</h4>
+                            <pre id="debug-input">No data yet</pre>
+                        </div>
+                        <div class="debug-section">
+                            <h4>Claude Raw Response</h4>
+                            <pre id="debug-response">No data yet</pre>
+                        </div>
+                        <div class="debug-section">
+                            <h4>Parsed Memories</h4>
+                            <pre id="debug-parsed">No data yet</pre>
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="memory-content">
                     <div class="memory-section">
                         <h4>People</h4>

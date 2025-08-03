@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeInput();
     initializeButtons();
     initializeModelSelector();
+    initializeDebugPanel();
     showWelcomeModal();
 });
 
@@ -115,6 +116,52 @@ function initializeModelSelector() {
 }
 
 /**
+ * Initialize debug panel functionality
+ */
+function initializeDebugPanel() {
+    const debugToggleBtn = document.getElementById('debug-toggle-btn');
+    const debugPanel = document.getElementById('debug-panel');
+    const debugContent = document.getElementById('debug-content');
+    
+    if (debugToggleBtn && debugPanel) {
+        let debugVisible = false;
+        
+        debugToggleBtn.addEventListener('click', function() {
+            debugVisible = !debugVisible;
+            debugPanel.style.display = debugVisible ? 'block' : 'none';
+            debugContent.style.display = debugVisible ? 'block' : 'none';
+            debugToggleBtn.textContent = debugVisible ? 'Hide Debug Info' : 'Show Debug Info';
+        });
+    }
+}
+
+/**
+ * Update debug panel with Memory Keeper processing info
+ */
+function updateDebugPanel(input, response, parsed) {
+    const debugInput = document.getElementById('debug-input');
+    const debugResponse = document.getElementById('debug-response');
+    const debugParsed = document.getElementById('debug-parsed');
+    
+    if (debugInput) debugInput.textContent = input || 'No input data';
+    if (debugResponse) debugResponse.textContent = response || 'No response data';
+    if (debugParsed) debugParsed.textContent = JSON.stringify(parsed, null, 2) || 'No parsed data';
+    
+    // Auto-show debug panel if there's an issue
+    if (response && (!parsed || Object.values(parsed).every(arr => arr.length === 0))) {
+        const debugPanel = document.getElementById('debug-panel');
+        const debugContent = document.getElementById('debug-content');
+        const debugToggleBtn = document.getElementById('debug-toggle-btn');
+        
+        if (debugPanel && debugContent && debugToggleBtn) {
+            debugPanel.style.display = 'block';
+            debugContent.style.display = 'block';
+            debugToggleBtn.textContent = 'Hide Debug Info';
+        }
+    }
+}
+
+/**
  * Show welcome modal
  */
 function showWelcomeModal() {
@@ -192,54 +239,61 @@ async function sendMessage() {
  * Process message with Memory Keeper agent
  */
 async function processWithMemoryKeeper(message) {
+    console.log('=== MEMORY KEEPER FRONTEND DEBUG ===');
+    console.log('Processing message:', message);
+    console.log('Selected model:', selectedModel);
+    console.log('Message length:', message.length);
+    
     updateMemoryStatus('Processing...');
     
     try {
+        const requestBody = { 
+            message,
+            model: selectedModel 
+        };
+        console.log('Request body:', JSON.stringify(requestBody, null, 2));
+        
         const response = await fetch('/api/memory-keeper', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ 
-                message,
-                model: selectedModel 
-            })
+            body: JSON.stringify(requestBody)
         });
         
+        console.log('Response status:', response.status);
+        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+        
         if (!response.ok) {
+            const errorText = await response.text();
+            console.error('API Error Response:', errorText);
             throw new Error(`Memory Keeper API error: ${response.status}`);
         }
         
         const data = await response.json();
+        console.log('Memory Keeper response:', JSON.stringify(data, null, 2));
         const extractedMemories = data.memories;
         
-        // Update memory display
-        if (extractedMemories.people && extractedMemories.people.length > 0) {
-            extractedMemories.people.forEach(person => addMemoryItem('people', person));
-        }
-        if (extractedMemories.dates && extractedMemories.dates.length > 0) {
-            extractedMemories.dates.forEach(date => addMemoryItem('dates', date));
-        }
-        if (extractedMemories.places && extractedMemories.places.length > 0) {
-            extractedMemories.places.forEach(place => addMemoryItem('places', place));
-        }
-        if (extractedMemories.relationships && extractedMemories.relationships.length > 0) {
-            extractedMemories.relationships.forEach(rel => addMemoryItem('relationships', rel));
-        }
-        if (extractedMemories.events && extractedMemories.events.length > 0) {
-            extractedMemories.events.forEach(event => addMemoryItem('events', event));
-        }
+        // Update debug panel with processing info
+        updateDebugPanel(
+            message, 
+            data.debugInfo?.rawResponse || 'Debug info not available', 
+            extractedMemories
+        );
         
-        updateMemoryStatus('Ready');
+        // Update memory display
+        updateMemoryDisplay(extractedMemories);
+        updateMemoryStatus('Complete');
         
     } catch (error) {
         console.error('Memory Keeper Error:', error);
-        updateMemoryStatus('API Error - Unable to extract memories');
+        updateMemoryStatus('Error: ' + error.message);
         
-        // Show error message to user
-        addMessage('ai', 'system', 
-            'I\'m sorry, I\'m having trouble connecting to the Memory Keeper service. Please check your internet connection and try again.',
-            { timestamp: new Date().toLocaleTimeString() }
+        // Update debug panel with error info
+        updateDebugPanel(
+            message,
+            `Error: ${error.message}`,
+            null
         );
     }
 }

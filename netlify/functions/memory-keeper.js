@@ -48,7 +48,15 @@ exports.handler = async (event, context) => {
     try {
         const { message, model = 'claude-3-5-sonnet-20241022' } = JSON.parse(event.body);
 
+        // Debug logging
+        console.log('=== MEMORY KEEPER DEBUG ===');
+        console.log('Input message:', message);
+        console.log('Selected model:', model);
+        console.log('Message length:', message?.length);
+        console.log('Message type:', typeof message);
+
         if (!message || typeof message !== 'string') {
+            console.log('ERROR: Invalid message format');
             return {
                 statusCode: 400,
                 body: JSON.stringify({ error: 'Message is required and must be a string' })
@@ -60,22 +68,31 @@ exports.handler = async (event, context) => {
             apiKey: process.env.ANTHROPIC_API_KEY,
         });
 
+        const promptContent = `Extract structured memories from this message: "${message}"`;
+        console.log('Prompt sent to Claude:', promptContent);
+        console.log('System prompt length:', MEMORY_KEEPER_SYSTEM_PROMPT.length);
+
         const response = await anthropic.messages.create({
             model: model,
             max_tokens: 500,
             system: MEMORY_KEEPER_SYSTEM_PROMPT,
             messages: [{
                 role: 'user',
-                content: `Extract structured memories from this message: "${message}"`
+                content: promptContent
             }]
         });
+
+        console.log('Claude raw response:', response.content[0].text);
+        console.log('Response length:', response.content[0].text.length);
 
         let extractedMemories;
         try {
             // Parse the JSON response from Claude
             extractedMemories = JSON.parse(response.content[0].text);
+            console.log('Successfully parsed memories:', JSON.stringify(extractedMemories, null, 2));
         } catch (parseError) {
             console.error('JSON Parse Error:', parseError);
+            console.error('Raw response that failed to parse:', response.content[0].text);
             // Fallback to empty structure if parsing fails
             extractedMemories = {
                 people: [],
@@ -84,6 +101,7 @@ exports.handler = async (event, context) => {
                 relationships: [],
                 events: []
             };
+            console.log('Using fallback empty structure');
         }
 
         return {
@@ -96,6 +114,13 @@ exports.handler = async (event, context) => {
             },
             body: JSON.stringify({
                 memories: extractedMemories,
+                debugInfo: {
+                    rawResponse: response.content[0].text,
+                    inputMessage: message,
+                    selectedModel: model,
+                    promptLength: MEMORY_KEEPER_SYSTEM_PROMPT.length,
+                    responseLength: response.content[0].text.length
+                },
                 agent: 'memory-keeper',
                 timestamp: new Date().toISOString()
             })
