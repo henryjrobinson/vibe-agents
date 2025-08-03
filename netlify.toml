@@ -15,7 +15,6 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https://api.anthropic.com;"
-    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
 
 # API redirects to Netlify Functions
 [[redirects]]
@@ -26,18 +25,6 @@
 [[redirects]]
   from = "/api/memory-keeper"
   to = "/.netlify/functions/memory-keeper"
-  status = 200
-
-# Auth page should be served directly
-[[redirects]]
-  from = "/auth.html"
-  to = "/auth.html"
-  status = 200
-
-# SPA fallback for other routes
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
   status = 200
 
 # Redirect rules for SPA behavior
