@@ -412,6 +412,46 @@ function addMessage(type, agent, content, metadata = {}) {
 }
 
 /**
+ * Update memory display with extracted memories
+ */
+function updateMemoryDisplay(extractedMemories) {
+    if (!extractedMemories) {
+        console.log('No extracted memories to display');
+        return;
+    }
+    
+    console.log('Updating memory display with:', extractedMemories);
+    
+    // Update each category
+    if (extractedMemories.people && extractedMemories.people.length > 0) {
+        extractedMemories.people.forEach(person => addMemoryItem('people', person));
+    }
+    if (extractedMemories.dates && extractedMemories.dates.length > 0) {
+        extractedMemories.dates.forEach(date => addMemoryItem('dates', date));
+    }
+    if (extractedMemories.places && extractedMemories.places.length > 0) {
+        extractedMemories.places.forEach(place => addMemoryItem('places', place));
+    }
+    if (extractedMemories.relationships && extractedMemories.relationships.length > 0) {
+        extractedMemories.relationships.forEach(rel => addMemoryItem('relationships', rel));
+    }
+    if (extractedMemories.events && extractedMemories.events.length > 0) {
+        extractedMemories.events.forEach(event => addMemoryItem('events', event));
+    }
+    
+    // Update session memories
+    Object.keys(extractedMemories).forEach(category => {
+        if (currentSession.memories[category] && Array.isArray(extractedMemories[category])) {
+            extractedMemories[category].forEach(item => {
+                if (!currentSession.memories[category].includes(item)) {
+                    currentSession.memories[category].push(item);
+                }
+            });
+        }
+    });
+}
+
+/**
  * Add memory item to display
  */
 function addMemoryItem(category, item) {
