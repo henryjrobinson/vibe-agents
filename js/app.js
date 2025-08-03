@@ -10,7 +10,6 @@ let currentSession = {
     }
 };
 let isTyping = false;
-let agentMetadataVisible = true;
 let memoryDisplayVisible = true;
 let loggingModeEnabled = false;
 let selectedModel = 'claude-3-5-sonnet-20241022'; // Default model
@@ -30,17 +29,8 @@ document.addEventListener('DOMContentLoaded', function() {
  * Initialize toggle switches
  */
 function initializeToggles() {
-    const agentToggle = document.getElementById('agent-metadata-toggle');
     const memoryToggle = document.getElementById('memory-display-toggle');
     const loggingToggle = document.getElementById('logging-mode-toggle');
-    
-    if (agentToggle) {
-        agentToggle.addEventListener('change', function() {
-            agentMetadataVisible = this.checked;
-            toggleAgentMetadataVisibility();
-        });
-        agentMetadataVisible = agentToggle.checked;
-    }
     
     if (memoryToggle) {
         memoryToggle.addEventListener('change', function() {
@@ -731,16 +721,6 @@ function hideTypingIndicator() {
     if (indicator) {
         indicator.style.display = 'none';
     }
-}
-
-/**
- * Toggle agent metadata visibility
- */
-function toggleAgentMetadataVisibility() {
-    const messages = document.querySelectorAll('.message.ai .agent-badge');
-    messages.forEach(badge => {
-        badge.style.display = agentMetadataVisible ? 'inline' : 'none';
-    });
 }
 
 /**
