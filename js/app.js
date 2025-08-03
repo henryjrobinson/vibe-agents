@@ -12,7 +12,9 @@ let currentSession = {
 let isTyping = false;
 let agentMetadataVisible = true;
 let memoryDisplayVisible = true;
+let loggingModeEnabled = false;
 let selectedModel = 'claude-3-5-sonnet-20241022'; // Default model
+let logEntries = [];
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
@@ -30,6 +32,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function initializeToggles() {
     const agentToggle = document.getElementById('agent-metadata-toggle');
     const memoryToggle = document.getElementById('memory-display-toggle');
+    const loggingToggle = document.getElementById('logging-mode-toggle');
     
     if (agentToggle) {
         agentToggle.addEventListener('change', function() {
@@ -45,6 +48,14 @@ function initializeToggles() {
             toggleMemoryPanelVisibility();
         });
         memoryDisplayVisible = memoryToggle.checked;
+    }
+    
+    if (loggingToggle) {
+        loggingToggle.addEventListener('change', function() {
+            loggingModeEnabled = this.checked;
+            toggleLoggingPanel();
+        });
+        loggingModeEnabled = loggingToggle.checked;
     }
 }
 
@@ -89,6 +100,17 @@ function initializeButtons() {
     const startStoryBtn = document.getElementById('start-story-btn');
     if (startStoryBtn) {
         startStoryBtn.addEventListener('click', startStorySession);
+    }
+    
+    // Logging control buttons
+    const clearLogBtn = document.getElementById('clear-log-btn');
+    if (clearLogBtn) {
+        clearLogBtn.addEventListener('click', clearLog);
+    }
+    
+    const exportLogBtn = document.getElementById('export-log-btn');
+    if (exportLogBtn) {
+        exportLogBtn.addEventListener('click', exportLog);
     }
 }
 
@@ -136,34 +158,87 @@ function initializeDebugPanel() {
 }
 
 /**
+ * Toggle logging panel visibility
+ */
+function toggleLoggingPanel() {
+    const panel = document.getElementById('logging-panel');
+    if (panel) {
+        panel.style.display = loggingModeEnabled ? 'block' : 'none';
+    }
+}
+
+/**
+ * Add entry to logging panel
+ */
+function addLogEntry(type, agent, data, isInput = true) {
+    if (!loggingModeEnabled) return;
+    
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = {
+        timestamp,
+        type,
+        agent,
+        data,
+        isInput
+    };
+    
+    logEntries.push(logEntry);
+    
+    const targetContainer = isInput ? 'log-inputs' : 'log-outputs';
+    const container = document.getElementById(targetContainer);
+    
+    if (container) {
+        const entryDiv = document.createElement('div');
+        entryDiv.className = `log-entry ${type}`;
+        
+        entryDiv.innerHTML = `
+            <div class="log-timestamp">${timestamp}</div>
+            <div class="log-agent">${agent}</div>
+            <pre>${JSON.stringify(data, null, 2)}</pre>
+        `;
+        
+        container.appendChild(entryDiv);
+        container.scrollTop = container.scrollHeight;
+    }
+}
+
+/**
+ * Clear logging panel
+ */
+function clearLog() {
+    logEntries = [];
+    const inputContainer = document.getElementById('log-inputs');
+    const outputContainer = document.getElementById('log-outputs');
+    
+    if (inputContainer) inputContainer.innerHTML = '';
+    if (outputContainer) outputContainer.innerHTML = '';
+}
+
+/**
+ * Export log data
+ */
+function exportLog() {
+    const logData = {
+        timestamp: new Date().toISOString(),
+        entries: logEntries,
+        session: currentSession
+    };
+    
+    const dataStr = JSON.stringify(logData, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(dataBlob);
+    link.download = `agent-log-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+}
+
+/**
  * Update debug panel with Memory Keeper processing info
  */
 function updateDebugPanel(input, response, parsed) {
-    const debugInput = document.getElementById('debug-input');
-    const debugResponse = document.getElementById('debug-response');
-    const debugParsed = document.getElementById('debug-parsed');
-    
-    if (debugInput) debugInput.textContent = input || 'No input data';
-    if (debugResponse) debugResponse.textContent = response || 'No response data';
-    if (debugParsed) debugParsed.textContent = JSON.stringify(parsed, null, 2) || 'No parsed data';
-    
-    // Auto-show debug panel if there are objects being displayed as [object Object]
-    const hasObjectIssues = parsed && Object.values(parsed).some(arr => 
-        Array.isArray(arr) && arr.some(item => typeof item === 'object' && item !== null)
-    );
-    
-    // Auto-show debug panel if there's an issue or object display problems
-    if (response && (hasObjectIssues || !parsed || Object.values(parsed).every(arr => arr.length === 0))) {
-        const debugPanel = document.getElementById('debug-panel');
-        const debugContent = document.getElementById('debug-content');
-        const debugToggleBtn = document.getElementById('debug-toggle-btn');
-        
-        if (debugPanel && debugContent && debugToggleBtn) {
-            debugPanel.style.display = 'block';
-            debugContent.style.display = 'block';
-            debugToggleBtn.textContent = 'Hide Debug Info';
-        }
-    }
+    // This function is kept for backward compatibility but logging mode replaces it
+    console.log('Debug info:', { input, response, parsed });
 }
 
 /**
@@ -244,10 +319,9 @@ async function sendMessage() {
  * Process message with Memory Keeper agent
  */
 async function processWithMemoryKeeper(message) {
-    console.log('=== MEMORY KEEPER FRONTEND DEBUG ===');
+    console.log('=== MEMORY KEEPER PROCESSING ===');
     console.log('Processing message:', message);
     console.log('Selected model:', selectedModel);
-    console.log('Message length:', message.length);
     
     updateMemoryStatus('Processing...');
     
@@ -256,7 +330,16 @@ async function processWithMemoryKeeper(message) {
             message,
             model: selectedModel 
         };
-        console.log('Request body:', JSON.stringify(requestBody, null, 2));
+        
+        // Log the input request
+        addLogEntry('input', 'Memory Keeper', {
+            action: 'extract_memories',
+            input_message: message,
+            model: selectedModel,
+            timestamp: new Date().toISOString()
+        }, true);
+        
+        console.log('Sending request to Memory Keeper API:', requestBody);
         
         const response = await fetch('/api/memory-keeper', {
             method: 'POST',
@@ -266,25 +349,33 @@ async function processWithMemoryKeeper(message) {
             body: JSON.stringify(requestBody)
         });
         
-        console.log('Response status:', response.status);
-        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-        
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('API Error Response:', errorText);
+            console.error('Memory Keeper API Error:', errorText);
+            
+            // Log the error
+            addLogEntry('error', 'Memory Keeper', {
+                error: `API Error ${response.status}`,
+                details: errorText,
+                timestamp: new Date().toISOString()
+            }, false);
+            
             throw new Error(`Memory Keeper API error: ${response.status}`);
         }
         
         const data = await response.json();
-        console.log('Memory Keeper response:', JSON.stringify(data, null, 2));
-        const extractedMemories = data.memories;
+        console.log('Memory Keeper response:', data);
         
-        // Update debug panel with processing info
-        updateDebugPanel(
-            message, 
-            data.debugInfo?.rawResponse || 'Debug info not available', 
-            extractedMemories
-        );
+        // Log the output response
+        addLogEntry('output', 'Memory Keeper', {
+            action: 'extract_memories_response',
+            raw_claude_response: data.debugInfo?.rawResponse,
+            extracted_memories: data.memories,
+            model_used: data.debugInfo?.selectedModel,
+            timestamp: new Date().toISOString()
+        }, false);
+        
+        const extractedMemories = data.memories;
         
         // Update memory display
         updateMemoryDisplay(extractedMemories);
@@ -294,12 +385,11 @@ async function processWithMemoryKeeper(message) {
         console.error('Memory Keeper Error:', error);
         updateMemoryStatus('Error: ' + error.message);
         
-        // Update debug panel with error info
-        updateDebugPanel(
-            message,
-            `Error: ${error.message}`,
-            null
-        );
+        // Log the error
+        addLogEntry('error', 'Memory Keeper', {
+            error: error.message,
+            timestamp: new Date().toISOString()
+        }, false);
     }
 }
 
@@ -317,25 +407,53 @@ async function processWithCollaborator(message) {
                 content: msg.content
             }));
         
+        const requestBody = { 
+            message,
+            conversationHistory,
+            model: selectedModel 
+        };
+        
+        // Log the input request
+        addLogEntry('input', 'Collaborator', {
+            action: 'generate_response',
+            user_message: message,
+            conversation_history: conversationHistory,
+            model: selectedModel,
+            timestamp: new Date().toISOString()
+        }, true);
+        
         const response = await fetch('/api/collaborator', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ 
-                message,
-                conversationHistory,
-                model: selectedModel 
-            })
+            body: JSON.stringify(requestBody)
         });
         
         if (!response.ok) {
+            const errorText = await response.text();
+            
+            // Log the error
+            addLogEntry('error', 'Collaborator', {
+                error: `API Error ${response.status}`,
+                details: errorText,
+                timestamp: new Date().toISOString()
+            }, false);
+            
             throw new Error(`Collaborator API error: ${response.status}`);
         }
         
         const data = await response.json();
         
-        // Add collaborator response after a realistic delay
+        // Log the output response
+        addLogEntry('output', 'Collaborator', {
+            action: 'generate_response_result',
+            claude_response: data.response,
+            model_used: selectedModel,
+            timestamp: new Date().toISOString()
+        }, false);
+        
+        // Add Collaborator response with delay for natural feel
         setTimeout(() => {
             addMessage('ai', 'collaborator', data.response, { 
                 timestamp: new Date().toLocaleTimeString() 
@@ -344,6 +462,12 @@ async function processWithCollaborator(message) {
         
     } catch (error) {
         console.error('Collaborator Error:', error);
+        
+        // Log the error
+        addLogEntry('error', 'Collaborator', {
+            error: error.message,
+            timestamp: new Date().toISOString()
+        }, false);
         
         // Show error message to user
         setTimeout(() => {
@@ -570,6 +694,22 @@ function updateMemoryStatus(status) {
     const statusElement = document.getElementById('memory-status');
     if (statusElement) {
         statusElement.textContent = status;
+        
+        // Update status styling
+        statusElement.className = 'memory-status';
+        if (status.toLowerCase().includes('processing')) {
+            statusElement.classList.add('processing');
+        } else if (status.toLowerCase().includes('complete')) {
+            statusElement.classList.add('complete');
+        } else if (status.toLowerCase().includes('error')) {
+            statusElement.classList.add('error');
+        }
+    }
+    
+    // Check if we have any memories and update status accordingly
+    const hasMemories = Object.values(currentSession.memories).some(arr => arr.length > 0);
+    if (hasMemories && status === 'Ready') {
+        updateMemoryStatus('Memories Collected');
     }
 }
 
