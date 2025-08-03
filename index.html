@@ -20,6 +20,14 @@
     <meta property="twitter:description" content="Share your life stories with AI - Collaborator and Memory Keeper agents help capture and organize your memories">
     
     <link rel="stylesheet" href="css/styles.css">
+    
+    <!-- Simple Auth Check -->
+    <script>
+        // Check authentication on page load
+        if (!sessionStorage.getItem('storyAuth')) {
+            window.location.href = '/auth.html';
+        }
+    </script>
 </head>
 <body>
     <div class="chat-container">
@@ -54,6 +62,7 @@
                     </div>
                     <button class="action-btn" id="new-story-btn" style="margin-left: 15px;">New Story</button>
                     <button class="action-btn" id="export-btn" style="margin-left: 10px;">Export</button>
+                    <button class="action-btn" id="logout-btn" style="margin-left: 10px; background: rgba(231,76,60,0.8);">Logout</button>
                 </div>
             </div>
         </div>

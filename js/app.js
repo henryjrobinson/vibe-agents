@@ -90,6 +90,12 @@ function initializeButtons() {
         exportBtn.addEventListener('click', exportSession);
     }
     
+    // Logout button
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', logout);
+    }
+    
     // Start story button (in modal)
     const startStoryBtn = document.getElementById('start-story-btn');
     if (startStoryBtn) {
@@ -768,6 +774,17 @@ function startNewSession() {
     
     // Show welcome modal again
     showWelcomeModal();
+}
+
+/**
+ * Logout function
+ */
+function logout() {
+    // Clear authentication
+    sessionStorage.removeItem('storyAuth');
+    
+    // Redirect to auth page
+    window.location.href = '/auth.html';
 }
 
 /**
