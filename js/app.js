@@ -32,13 +32,17 @@ function initializeToggles() {
     const memoryToggle = document.getElementById('memory-display-toggle');
     const loggingToggle = document.getElementById('logging-mode-toggle');
     
-    if (memoryToggle) {
-        memoryToggle.addEventListener('change', function() {
-            memoryDisplayVisible = this.checked;
-            toggleMemoryPanelVisibility();
-        });
-        memoryDisplayVisible = memoryToggle.checked;
-    }
+    // Memory Keeper toggle is now hidden, so always show memory display
+    memoryDisplayVisible = true;
+    
+    // Comment out memory toggle handling since it's hidden
+    // if (memoryToggle) {
+    //     memoryToggle.addEventListener('change', function() {
+    //         memoryDisplayVisible = this.checked;
+    //         toggleMemoryPanelVisibility();
+    //     });
+    //     memoryDisplayVisible = memoryToggle.checked;
+    // }
     
     if (loggingToggle) {
         loggingToggle.addEventListener('change', function() {
