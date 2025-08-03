@@ -1,0 +1,8 @@
+{
+  "name": "vibe-agents-functions",
+  "version": "1.0.0",
+  "description": "Netlify Functions for Vibe Agents Story Collection",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.24.3"
+  }
+}
