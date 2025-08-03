@@ -469,37 +469,96 @@ function addMemoryItem(category, item) {
         placeholder.remove();
     }
     
-    // Handle different item formats (string, object, etc.)
-    let displayText;
-    if (typeof item === 'string') {
-        displayText = item;
-    } else if (typeof item === 'object' && item !== null) {
-        // If it's an object, try to extract meaningful text
-        if (item.name) {
-            displayText = item.name;
-        } else if (item.text) {
-            displayText = item.text;
-        } else if (item.value) {
-            displayText = item.value;
-        } else {
-            // Fallback: stringify the object in a readable way
-            displayText = JSON.stringify(item);
-        }
-    } else {
-        displayText = String(item);
-    }
+    console.log(`Adding memory item to ${category}:`, item);
     
-    console.log(`Adding memory item to ${category}:`, item, '-> Display text:', displayText);
-    
-    // Check if item already exists
-    const existing = Array.from(container.children).find(child => 
-        child.textContent === displayText
-    );
-    if (existing) return;
-    
+    // Create the memory item element
     const itemDiv = document.createElement('div');
     itemDiv.className = 'memory-item';
-    itemDiv.textContent = displayText;
+    
+    // Handle different item formats and categories
+    if (typeof item === 'string') {
+        // Simple string - just display it
+        itemDiv.textContent = item;
+    } else if (typeof item === 'object' && item !== null) {
+        // Structured object - format based on category
+        switch (category) {
+            case 'people':
+                itemDiv.textContent = item.name || item.person || JSON.stringify(item);
+                break;
+                
+            case 'dates':
+                if (item.event && item.timeframe) {
+                    itemDiv.innerHTML = `
+                        <div class="memory-title">${item.event}</div>
+                        <div class="memory-detail">When: ${item.timeframe}</div>
+                        ${item.details ? `<div class="memory-detail">${item.details}</div>` : ''}
+                    `;
+                } else {
+                    itemDiv.textContent = item.date || item.time || JSON.stringify(item);
+                }
+                break;
+                
+            case 'places':
+                if (item.location) {
+                    itemDiv.innerHTML = `
+                        <div class="memory-title">${item.location}</div>
+                        ${item.significance ? `<div class="memory-detail">${item.significance}</div>` : ''}
+                        ${item.details ? `<div class="memory-detail">${item.details}</div>` : ''}
+                    `;
+                } else {
+                    itemDiv.textContent = item.place || item.name || JSON.stringify(item);
+                }
+                break;
+                
+            case 'relationships':
+                if (item.connection && item.nature) {
+                    itemDiv.innerHTML = `
+                        <div class="memory-title">${item.connection}</div>
+                        <div class="memory-detail">Relationship: ${item.nature}</div>
+                        ${item.details ? `<div class="memory-detail">${item.details}</div>` : ''}
+                    `;
+                } else {
+                    itemDiv.textContent = item.relationship || item.person || JSON.stringify(item);
+                }
+                break;
+                
+            case 'events':
+                if (item.event) {
+                    itemDiv.innerHTML = `
+                        <div class="memory-title">${item.event}</div>
+                        ${item.participants ? `<div class="memory-detail">Who: ${item.participants}</div>` : ''}
+                        ${item.details ? `<div class="memory-detail">${item.details}</div>` : ''}
+                    `;
+                } else {
+                    itemDiv.textContent = item.name || JSON.stringify(item);
+                }
+                break;
+                
+            default:
+                // Fallback for unknown categories
+                if (item.name) {
+                    itemDiv.textContent = item.name;
+                } else if (item.text) {
+                    itemDiv.textContent = item.text;
+                } else {
+                    itemDiv.textContent = JSON.stringify(item);
+                }
+        }
+    } else {
+        itemDiv.textContent = String(item);
+    }
+    
+    // Check if similar item already exists (compare by main content)
+    const mainText = itemDiv.querySelector('.memory-title')?.textContent || itemDiv.textContent;
+    const existing = Array.from(container.children).find(child => {
+        const existingMainText = child.querySelector('.memory-title')?.textContent || child.textContent;
+        return existingMainText === mainText;
+    });
+    
+    if (existing) {
+        console.log(`Duplicate memory item skipped for ${category}:`, mainText);
+        return;
+    }
     
     container.appendChild(itemDiv);
 }

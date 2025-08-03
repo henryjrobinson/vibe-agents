@@ -479,13 +479,34 @@ body {
 }
 
 .memory-item {
-    background: white;
-    padding: 10px 15px;
-    border-radius: var(--border-radius-sm);
-    font-size: 0.9em;
-    box-shadow: var(--shadow-sm);
-    border-left: 3px solid #3498db;
-    animation: memoryItemSlideIn 0.3s ease;
+    background: #f8f9fa;
+    padding: 12px;
+    margin: 8px 0;
+    border-radius: 8px;
+    border-left: 4px solid #007bff;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.memory-title {
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 4px;
+    font-size: 15px;
+}
+
+.memory-detail {
+    color: #6c757d;
+    font-size: 13px;
+    margin: 2px 0;
+    padding-left: 8px;
+    border-left: 2px solid #e9ecef;
+    margin-left: 4px;
+}
+
+.memory-item:hover {
+    background: #e9ecef;
+    transition: background-color 0.2s ease;
 }
 
 @keyframes memoryItemSlideIn {
