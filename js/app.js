@@ -497,7 +497,7 @@ function addMessage(type, agent, content, metadata = {}) {
     const meta = document.createElement('div');
     meta.className = 'message-meta';
     
-    if (agentMetadataVisible && type === 'ai') {
+    if (type === 'ai') {
         const badge = document.createElement('span');
         badge.className = 'agent-badge';
         badge.textContent = agent === 'collaborator' ? 'Collaborator' : 'Memory Keeper';
