@@ -147,8 +147,13 @@ function updateDebugPanel(input, response, parsed) {
     if (debugResponse) debugResponse.textContent = response || 'No response data';
     if (debugParsed) debugParsed.textContent = JSON.stringify(parsed, null, 2) || 'No parsed data';
     
-    // Auto-show debug panel if there's an issue
-    if (response && (!parsed || Object.values(parsed).every(arr => arr.length === 0))) {
+    // Auto-show debug panel if there are objects being displayed as [object Object]
+    const hasObjectIssues = parsed && Object.values(parsed).some(arr => 
+        Array.isArray(arr) && arr.some(item => typeof item === 'object' && item !== null)
+    );
+    
+    // Auto-show debug panel if there's an issue or object display problems
+    if (response && (hasObjectIssues || !parsed || Object.values(parsed).every(arr => arr.length === 0))) {
         const debugPanel = document.getElementById('debug-panel');
         const debugContent = document.getElementById('debug-content');
         const debugToggleBtn = document.getElementById('debug-toggle-btn');
@@ -464,15 +469,37 @@ function addMemoryItem(category, item) {
         placeholder.remove();
     }
     
+    // Handle different item formats (string, object, etc.)
+    let displayText;
+    if (typeof item === 'string') {
+        displayText = item;
+    } else if (typeof item === 'object' && item !== null) {
+        // If it's an object, try to extract meaningful text
+        if (item.name) {
+            displayText = item.name;
+        } else if (item.text) {
+            displayText = item.text;
+        } else if (item.value) {
+            displayText = item.value;
+        } else {
+            // Fallback: stringify the object in a readable way
+            displayText = JSON.stringify(item);
+        }
+    } else {
+        displayText = String(item);
+    }
+    
+    console.log(`Adding memory item to ${category}:`, item, '-> Display text:', displayText);
+    
     // Check if item already exists
     const existing = Array.from(container.children).find(child => 
-        child.textContent === item
+        child.textContent === displayText
     );
     if (existing) return;
     
     const itemDiv = document.createElement('div');
     itemDiv.className = 'memory-item';
-    itemDiv.textContent = item;
+    itemDiv.textContent = displayText;
     
     container.appendChild(itemDiv);
 }
