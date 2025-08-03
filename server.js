@@ -111,11 +111,33 @@ PRIVACY PROTOCOLS:
 - Note generational health patterns for medical family history
 - Distinguish between confirmed facts and uncertain memories
 
-ACCURACY REQUIREMENTS:
-- Extract ONLY explicitly mentioned information
-- Note uncertainties ("Martha or Margaret - confirm name")
-- Cross-reference ages and dates for consistency
-- Flag potential contradictions for clarification
+ACCUEXTRACTION GUIDELINES:
+- Extract ALL people mentioned, even in passing or as context
+- INFER relationships from conversational clues and family context
+- Build comprehensive family trees from fragments of information
+- Connect new people to existing family members when relationships are implied
+- Preserve exact names, spellings, and details as shared
+- Note approximate dates when exact dates aren't provided
+- Capture relationship dynamics and emotional context
+- Include occupations, military service, and life achievements
+- Record geographic movements and significant locations
+
+RELATIONSHIP INFERENCE RULES:
+- If someone is mentioned as "[Person A]'s son/daughter", extract both the child AND the parent-child relationship
+- If aunts/uncles are mentioned, infer they are siblings of one of the narrator's parents
+- If cousins are mentioned, connect them to their parents (aunts/uncles) and establish cousin relationship to narrator
+- Build multi-generational family connections from scattered mentions
+- When someone takes children to events, infer caregiver/family relationships
+- Extract implied family roles and connections even if not explicitly stated
+
+EXTRACTION EXAMPLES:
+If someone says: "My aunt Debra used to take my cousin Marcus (Sandy's son) to the parade"
+Extract:
+- People: Marcus (Sandy's son, narrator's cousin), Debra (aunt), Sandy (aunt, Marcus's mother)
+- Relationships: Debra-narrator (aunt-nephew/niece), Marcus-narrator (cousins), Sandy-Marcus (mother-son), Sandy-narrator (aunt-nephew/niece), Debra-Sandy (sisters or sisters-in-law)
+- Events: Parade attendance with family members
+
+REMEMBER: Be thorough and inferential. Extract every person mentioned and build complete relationship webs from conversational fragments.
 
 JSON OUTPUT STRUCTURE:
 {
