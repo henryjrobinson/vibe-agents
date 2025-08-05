@@ -1,67 +1,23 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const { validateApiRequest, createErrorResponse, createOptionsResponse, createSecureCorsHeaders } = require('./validation-utils');
 
-const MEMORY_KEEPER_SYSTEM_PROMPT = `You are a Memory Keeper agent that extracts and organizes structured information from elderly storytelling conversations. You work alongside the Collaborator to preserve family histories with exceptional attention to detail, privacy, and generational patterns.
+const MEMORY_KEEPER_SYSTEM_PROMPT = `You are a JSON extraction agent. You MUST respond with ONLY valid JSON, no other text.
 
-EXTRACTION CATEGORIES:
-1. **People**: Names, nicknames, relationships, roles, ages, locations, occupations
-2. **Dates**: Years, decades, ages, time periods, seasons, life events timing
-3. **Places**: Cities, neighborhoods, farms, schools, military bases, specific addresses
-4. **Relationships**: Family connections, friendships, romantic relationships, professional ties
-5. **Events**: Births, deaths, marriages, military service, moves, jobs, celebrations
-
-PRIVACY AND SENSITIVITY:
-- Handle all personal information with utmost care and respect
-- Be especially gentle with sensitive topics (deaths, divorces, trauma)
-- Preserve the dignity and privacy of all individuals mentioned
-- Focus on positive memories and meaningful connections
-- Respect cultural and religious contexts
-
-EXTRACTION GUIDELINES:
-- Extract ALL people mentioned, even in passing or as context
-- INFER relationships from conversational clues and family context
-- Build comprehensive family trees from fragments of information
-- Connect new people to existing family members when relationships are implied
-- Preserve exact names, spellings, and details as shared
-- Note approximate dates when exact dates aren't provided
-- Capture relationship dynamics and emotional context
-- Include occupations, military service, and life achievements
-- Record geographic movements and significant locations
-
-RELATIONSHIP INFERENCE RULES:
-- If someone is mentioned as "[Person A]'s son/daughter", extract both the child AND the parent-child relationship
-- If aunts/uncles are mentioned, infer they are siblings of one of the narrator's parents
-- If cousins are mentioned, connect them to their parents (aunts/uncles) and establish cousin relationship to narrator
-- Build multi-generational family connections from scattered mentions
-- When someone takes children to events, infer caregiver/family relationships
-- Extract implied family roles and connections even if not explicitly stated
-
-EXTRACTION EXAMPLES:
-If someone says: "My aunt Debra used to take my cousin Marcus (Sandy's son) to the parade"
-Extract:
-- People: Marcus (Sandy's son, narrator's cousin), Debra (aunt), Sandy (aunt, Marcus's mother)
-- Relationships: Debra-narrator (aunt-nephew/niece), Marcus-narrator (cousins), Sandy-Marcus (mother-son), Sandy-narrator (aunt-nephew/niece), Debra-Sandy (sisters or sisters-in-law)
-- Events: Parade attendance with family members
-
-If someone mentions: "We went to St. Luke AME Zion Church"
-Extract:
-- Places: St. Luke AME Zion Church (family church, community gathering place)
-- Events: Church attendance (regular family activity)
-- Relationships: Family religious community connections
-
-OUTPUT FORMAT:
-Always respond with valid JSON in this exact structure:
+Your job: Extract structured information from messages and return it in this EXACT JSON format:
 {
-  "people": [{"name": "string", "relationship": "string", "details": "string"}],
-  "dates": [{"event": "string", "timeframe": "string", "details": "string"}],
-  "places": [{"location": "string", "significance": "string", "details": "string"}],
-  "relationships": [{"connection": "string", "nature": "string", "details": "string"}],
-  "events": [{"event": "string", "participants": "string", "details": "string"}]
+  "people": [],
+  "dates": [],
+  "places": [],
+  "relationships": [],
+  "events": []
 }
 
-REMEMBER: Be thorough and inferential. Extract every person mentioned and build complete relationship webs from conversational fragments.
-
-Remember: You're preserving family legacy with the same care and attention the family would want for their most precious memories.`;
+Rules:
+- If someone mentions their name, add to people array
+- If someone mentions a place, add to places array
+- NO explanatory text, NO markdown, NO comments
+- ONLY return the JSON object
+- If nothing to extract, return empty arrays`;
 
 exports.handler = async (event, context) => {
     let validation;
@@ -90,21 +46,23 @@ exports.handler = async (event, context) => {
             apiKey: process.env.ANTHROPIC_API_KEY,
         });
 
-        const promptContent = `You must extract structured information from: "${message}"
+        const promptContent = `Extract information from: "${message}"
+
+You MUST respond with ONLY valid JSON in this exact format:
+{
+  "people": [],
+  "dates": [],
+  "places": [],
+  "relationships": [],
+  "events": []
+}
 
 Rules:
-1. If someone says their name, add them to "people" array
-2. If someone mentions a place they lived/grew up, add it to "places" array  
-3. Extract ALL information, don't return empty arrays if there's something to extract
+- If someone mentions their name, add to people array: {"name": "Name", "relationship": "narrator", "details": "person telling story"}
+- If someone mentions a place, add to places array: {"location": "Place", "significance": "context", "details": "description"}
+- NO explanatory text, NO markdown, ONLY the JSON object
 
-Examples:
-"My name is John" → {"people": [{"name": "John", "relationship": "narrator", "details": "storyteller"}], "dates": [], "places": [], "relationships": [], "events": []}
-
-"I grew up in Boston" → {"people": [], "dates": [], "places": [{"location": "Boston", "significance": "childhood home", "details": "where they grew up"}], "relationships": [], "events": []}
-
-Now extract from: "${message}"
-
-Respond with valid JSON only:`;
+Message: "${message}"`;
         console.log('Prompt sent to Claude:', promptContent);
         console.log('System prompt length:', MEMORY_KEEPER_SYSTEM_PROMPT.length);
 
