@@ -19,6 +19,46 @@ let loggingModeEnabled = false;
 let selectedModel = 'claude-opus-4-20250514'; // Default model - Claude 4 Opus (Most Capable)
 let logEntries = [];
 
+/**
+ * Sanitize error messages for user-friendly display to seniors
+ */
+function sanitizeErrorForUser(error) {
+    const errorMessage = error.message || error.toString();
+    
+    // Map technical errors to friendly messages
+    const friendlyMessages = {
+        'Failed to fetch': 'Having trouble connecting. Please check your internet connection and try again.',
+        'Network request failed': 'Connection problem. Please try again in a moment.',
+        'Timeout': 'The request is taking too long. Please try again.',
+        'Authentication': 'Please refresh the page and try again.',
+        'Forbidden': 'Access issue. Please refresh the page.',
+        'Too Many Requests': 'Please wait a moment before trying again.',
+        'Internal Server Error': 'We\'re experiencing technical difficulties. Please try again shortly.',
+        'Service Unavailable': 'Service is temporarily unavailable. Please try again in a few minutes.'
+    };
+    
+    // Check if error message contains any technical terms
+    for (const [technical, friendly] of Object.entries(friendlyMessages)) {
+        if (errorMessage.includes(technical)) {
+            return friendly;
+        }
+    }
+    
+    // For API errors with status codes
+    if (errorMessage.includes('403')) {
+        return 'Access issue. Please refresh the page and try again.';
+    }
+    if (errorMessage.includes('500')) {
+        return 'We\'re experiencing technical difficulties. Please try again in a moment.';
+    }
+    if (errorMessage.includes('429')) {
+        return 'Please wait a moment before sending another message.';
+    }
+    
+    // Default friendly message
+    return 'Something went wrong. Please try again, or refresh the page if the problem continues.';
+}
+
 // Initialize the application
 document.addEventListener('DOMContentLoaded', async function() {
     initializeToggles();
@@ -509,11 +549,13 @@ async function processWithMemoryKeeper(message) {
         
     } catch (error) {
         console.error('Memory Keeper Error:', error);
-        updateMemoryStatus('Error: ' + error.message);
+        const friendlyMessage = sanitizeErrorForUser(error);
+        updateMemoryStatus('Unable to process memories: ' + friendlyMessage);
         
         // Log the error
         addLogEntry('error', 'Memory Keeper', {
             error: error.message,
+            friendlyError: friendlyMessage,
             timestamp: new Date().toISOString()
         }, false);
     }

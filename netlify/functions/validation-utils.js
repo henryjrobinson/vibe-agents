@@ -286,9 +286,49 @@ function validateApiRequest(event) {
 /**
  * Create standardized error response with secure CORS
  */
+/**
+ * Sanitize error messages for user-friendly display
+ */
+function sanitizeErrorMessage(error, statusCode) {
+    // For seniors and general users, provide friendly messages
+    const friendlyMessages = {
+        400: "Please check your input and try again.",
+        401: "Authentication is required. Please refresh the page.",
+        403: "Access denied. Please try refreshing the page.",
+        413: "Your message is too long. Please try a shorter message.",
+        429: "Please wait a moment before sending another message.",
+        500: "We're experiencing technical difficulties. Please try again in a moment.",
+        502: "Service temporarily unavailable. Please try again shortly.",
+        503: "Service temporarily unavailable. Please try again shortly."
+    };
+    
+    // For validation errors, use the specific message if it's user-friendly
+    if (error.name === 'ValidationError') {
+        const message = error.message;
+        // Allow specific user-friendly validation messages
+        if (message.includes('too long') || 
+            message.includes('required') || 
+            message.includes('invalid') ||
+            message.includes('not allowed')) {
+            return message;
+        }
+    }
+    
+    // Return friendly message based on status code
+    return friendlyMessages[statusCode] || friendlyMessages[500];
+}
+
 function createErrorResponse(error, allowedOrigin = null) {
     const statusCode = error.statusCode || 500;
-    const message = error.name === 'ValidationError' ? error.message : 'Internal server error';
+    const sanitizedMessage = sanitizeErrorMessage(error, statusCode);
+    
+    // Log the actual error for debugging (server-side only)
+    console.error('API Error:', {
+        message: error.message,
+        stack: error.stack,
+        statusCode,
+        timestamp: new Date().toISOString()
+    });
     
     const headers = {
         'Content-Type': 'application/json',
@@ -305,7 +345,7 @@ function createErrorResponse(error, allowedOrigin = null) {
         statusCode,
         headers,
         body: JSON.stringify({
-            error: message,
+            error: sanitizedMessage,
             timestamp: new Date().toISOString()
         })
     };
