@@ -5,8 +5,15 @@
 
 class SecureStorage {
     constructor() {
-        this.encryptionKey = null;
-        this.keyGenerated = false;
+        // Use closure to hide encryption key - key is not accessible as a property
+        let encryptionKey = null;
+        let keyGenerated = false;
+        
+        // Private methods using closure scope
+        this._getKey = () => encryptionKey;
+        this._setKey = (key) => { encryptionKey = key; };
+        this._isKeyGenerated = () => keyGenerated;
+        this._setKeyGenerated = (status) => { keyGenerated = status; };
     }
 
     /**
@@ -14,7 +21,7 @@ class SecureStorage {
      */
     async generateKey() {
         try {
-            this.encryptionKey = await window.crypto.subtle.generateKey(
+            const key = await window.crypto.subtle.generateKey(
                 {
                     name: 'AES-GCM',
                     length: 256
@@ -22,7 +29,8 @@ class SecureStorage {
                 false, // Not extractable for security
                 ['encrypt', 'decrypt']
             );
-            this.keyGenerated = true;
+            this._setKey(key);
+            this._setKeyGenerated(true);
             console.log('🔐 Encryption key generated successfully');
         } catch (error) {
             console.error('Failed to generate encryption key:', error);
@@ -36,7 +44,7 @@ class SecureStorage {
      * @returns {string} - Base64 encoded encrypted data with IV
      */
     async encrypt(plaintext) {
-        if (!this.keyGenerated) {
+        if (!this._isKeyGenerated()) {
             await this.generateKey();
         }
 
@@ -54,7 +62,7 @@ class SecureStorage {
                     name: 'AES-GCM',
                     iv: iv
                 },
-                this.encryptionKey,
+                this._getKey(),
                 data
             );
 
@@ -77,7 +85,7 @@ class SecureStorage {
      * @returns {string} - Decrypted plaintext
      */
     async decrypt(encryptedData) {
-        if (!this.keyGenerated) {
+        if (!this._isKeyGenerated()) {
             throw new Error('Encryption key not available');
         }
 
@@ -97,7 +105,7 @@ class SecureStorage {
                     name: 'AES-GCM',
                     iv: iv
                 },
-                this.encryptionKey,
+                this._getKey(),
                 encrypted
             );
 

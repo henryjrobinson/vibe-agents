@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Encryption Security Demo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .demo-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-result {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        .storage-view {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔐 Encryption Security Demonstration</h1>
+    
+    <div class="demo-container">
+        <h2>Test 1: Encryption/Decryption Functionality</h2>
+        <p>This test demonstrates that sensitive data is properly encrypted before storage.</p>
+        
+        <input type="text" id="testInput" placeholder="Enter sensitive test data (e.g., 'My name is John Doe')" style="width: 100%; padding: 8px; margin: 10px 0;">
+        
+        <button onclick="testEncryption()">🔐 Test Encryption</button>
+        <button onclick="clearTest()">🗑️ Clear Test</button>
+        
+        <div id="encryptionResults"></div>
+    </div>
+    
+    <div class="demo-container">
+        <h2>Test 2: SessionStorage Inspection</h2>
+        <p>View what's actually stored in the browser's sessionStorage.</p>
+        
+        <button onclick="showSessionStorage()">👁️ Inspect SessionStorage</button>
+        <button onclick="clearSessionStorage()">🗑️ Clear SessionStorage</button>
+        
+        <div id="storageResults"></div>
+    </div>
+    
+    <div class="demo-container">
+        <h2>Test 3: Security Verification</h2>
+        <p>Verify that data cannot be read without proper decryption.</p>
+        
+        <button onclick="securityTest()">🛡️ Run Security Test</button>
+        
+        <div id="securityResults"></div>
+    </div>
+
+    <!-- Include the crypto utilities -->
+    <script src="js/crypto-utils.js"></script>
+    
+    <script>
+        let testResults = document.getElementById('encryptionResults');
+        let storageResults = document.getElementById('storageResults');
+        let securityResults = document.getElementById('securityResults');
+        
+        async function testEncryption() {
+            const input = document.getElementById('testInput').value;
+            if (!input) {
+                showResult(testResults, 'Please enter some test data first.', 'error');
+                return;
+            }
+            
+            try {
+                showResult(testResults, 'Testing encryption...', 'info');
+                
+                // Test encryption
+                const encrypted = await window.secureStorage.encrypt(input);
+                showResult(testResults, `✅ ENCRYPTION SUCCESS
+Original Data: "${input}"
+Encrypted Data: "${encrypted.substring(0, 50)}..."
+Length: ${encrypted.length} characters`, 'success');
+                
+                // Test decryption
+                const decrypted = await window.secureStorage.decrypt(encrypted);
+                
+                if (decrypted === input) {
+                    showResult(testResults, `✅ DECRYPTION SUCCESS
+Decrypted Data: "${decrypted}"
+✅ Data integrity verified!`, 'success', true);
+                } else {
+                    showResult(testResults, `❌ DECRYPTION FAILED
+Expected: "${input}"
+Got: "${decrypted}"`, 'error', true);
+                }
+                
+                // Test secure storage
+                await window.secureStorage.setSecureItem('demo_test', { 
+                    message: input, 
+                    timestamp: new Date().toISOString() 
+                });
+                
+                const retrieved = await window.secureStorage.getSecureItem('demo_test');
+                
+                if (retrieved && retrieved.message === input) {
+                    showResult(testResults, `✅ SECURE STORAGE SUCCESS
+Stored and retrieved data matches original!`, 'success', true);
+                } else {
+                    showResult(testResults, `❌ SECURE STORAGE FAILED`, 'error', true);
+                }
+                
+            } catch (error) {
+                showResult(testResults, `❌ ENCRYPTION TEST FAILED
+Error: ${error.message}`, 'error');
+            }
+        }
+        
+        function showSessionStorage() {
+            try {
+                const storage = {};
+                for (let i = 0; i < sessionStorage.length; i++) {
+                    const key = sessionStorage.key(i);
+                    storage[key] = sessionStorage.getItem(key);
+                }
+                
+                const storageHtml = `
+                    <h4>Current SessionStorage Contents:</h4>
+                    <div class="storage-view">${JSON.stringify(storage, null, 2)}</div>
+                    
+                    <h4>Security Analysis:</h4>
+                    ${analyzeStorage(storage)}
+                `;
+                
+                storageResults.innerHTML = storageHtml;
+            } catch (error) {
+                showResult(storageResults, `Error reading sessionStorage: ${error.message}`, 'error');
+            }
+        }
+        
+        function analyzeStorage(storage) {
+            const secureKeys = Object.keys(storage).filter(key => key.startsWith('secure_'));
+            const plainKeys = Object.keys(storage).filter(key => !key.startsWith('secure_'));
+            
+            let analysis = '<div class="test-result info">';
+            
+            if (secureKeys.length > 0) {
+                analysis += `✅ Found ${secureKeys.length} encrypted storage item(s):\n`;
+                secureKeys.forEach(key => {
+                    const value = storage[key];
+                    analysis += `  - ${key}: ${value.length} chars (encrypted)\n`;
+                });
+            }
+            
+            if (plainKeys.length > 0) {
+                analysis += `⚠️ Found ${plainKeys.length} unencrypted storage item(s):\n`;
+                plainKeys.forEach(key => {
+                    analysis += `  - ${key}: ${storage[key].substring(0, 50)}...\n`;
+                });
+            }
+            
+            if (secureKeys.length > 0 && plainKeys.length === 0) {
+                analysis += '\n🔐 SECURITY STATUS: EXCELLENT - All data is encrypted!';
+            } else if (secureKeys.length > 0) {
+                analysis += '\n🔒 SECURITY STATUS: GOOD - Sensitive data is encrypted';
+            } else {
+                analysis += '\n⚠️ SECURITY STATUS: NEEDS IMPROVEMENT - No encryption detected';
+            }
+            
+            analysis += '</div>';
+            return analysis;
+        }
+        
+        async function securityTest() {
+            try {
+                showResult(securityResults, 'Running security verification...', 'info');
+                
+                // Test 1: Verify encryption keys are not accessible
+                let keyAccessible = false;
+                try {
+                    // Try multiple ways to access the key
+                    const key1 = window.secureStorage.encryptionKey;
+                    const key2 = window.secureStorage._getKey;
+                    const key3 = Object.getOwnPropertyNames(window.secureStorage).includes('encryptionKey');
+                    
+                    // If any of these return the actual key, it's accessible
+                    keyAccessible = !!key1 || (key2 && typeof key2() !== 'undefined') || key3;
+                } catch (e) {
+                    keyAccessible = false;
+                }
+                
+                // Test 2: Verify encrypted data is unreadable
+                const testData = "SENSITIVE: Social Security Number 123-45-6789";
+                const encrypted = await window.secureStorage.encrypt(testData);
+                const containsSensitiveData = encrypted.includes("123-45-6789") || encrypted.includes("Social Security");
+                
+                // Test 3: Verify different encryptions of same data are different
+                const encrypted2 = await window.secureStorage.encrypt(testData);
+                const encryptionsAreDifferent = encrypted !== encrypted2;
+                
+                let results = `🛡️ SECURITY VERIFICATION RESULTS:
+
+Test 1 - Encryption Key Protection:
+${keyAccessible ? '❌ FAIL: Encryption key is accessible' : '✅ PASS: Encryption key is protected'}
+
+Test 2 - Data Obfuscation:
+${containsSensitiveData ? '❌ FAIL: Sensitive data visible in encrypted form' : '✅ PASS: Sensitive data is properly obfuscated'}
+
+Test 3 - Encryption Randomness:
+${encryptionsAreDifferent ? '✅ PASS: Each encryption is unique (proper IV usage)' : '❌ FAIL: Encryptions are identical (security risk)'}
+
+Overall Security Status: ${!keyAccessible && !containsSensitiveData && encryptionsAreDifferent ? '🔐 SECURE' : '⚠️ NEEDS ATTENTION'}`;
+                
+                showResult(securityResults, results, !keyAccessible && !containsSensitiveData && encryptionsAreDifferent ? 'success' : 'error');
+                
+            } catch (error) {
+                showResult(securityResults, `❌ Security test failed: ${error.message}`, 'error');
+            }
+        }
+        
+        function clearTest() {
+            testResults.innerHTML = '';
+            document.getElementById('testInput').value = '';
+            window.secureStorage.removeSecureItem('demo_test');
+        }
+        
+        function clearSessionStorage() {
+            sessionStorage.clear();
+            storageResults.innerHTML = '<div class="test-result success">SessionStorage cleared!</div>';
+        }
+        
+        function showResult(container, message, type, append = false) {
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.textContent = message;
+            
+            if (append) {
+                container.appendChild(div);
+            } else {
+                container.innerHTML = '';
+                container.appendChild(div);
+            }
+        }
+        
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                if (window.secureStorage) {
+                    showResult(testResults, '✅ Encryption system loaded successfully!', 'success');
+                } else {
+                    showResult(testResults, '❌ Encryption system not available!', 'error');
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
