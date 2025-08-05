@@ -42,7 +42,7 @@ exports.handler = async (event, context) => {
     }
 
     try {
-        const { message, conversationHistory = [], model = 'claude-3-5-sonnet-20241022' } = JSON.parse(event.body);
+        const { message, conversationHistory = [], model = 'claude-opus-4-20250514' } = JSON.parse(event.body);
 
         if (!message || typeof message !== 'string') {
             return {

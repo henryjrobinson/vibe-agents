@@ -72,7 +72,7 @@ exports.handler = async (event, context) => {
     }
 
     try {
-        const { message, model = 'claude-3-5-sonnet-20241022' } = JSON.parse(event.body);
+        const { message, model = 'claude-opus-4-20250514' } = JSON.parse(event.body);
 
         // Debug logging
         console.log('=== MEMORY KEEPER DEBUG ===');
