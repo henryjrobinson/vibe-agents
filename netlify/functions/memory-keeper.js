@@ -1,5 +1,5 @@
 const Anthropic = require('@anthropic-ai/sdk');
-const { validateApiRequest, createErrorResponse, createOptionsResponse } = require('./validation-utils');
+const { validateApiRequest, createErrorResponse, createOptionsResponse, createSecureCorsHeaders } = require('./validation-utils');
 
 const MEMORY_KEEPER_SYSTEM_PROMPT = `You are a Memory Keeper agent that extracts and organizes structured information from elderly storytelling conversations. You work alongside the Collaborator to preserve family histories with exceptional attention to detail, privacy, and generational patterns.
 
@@ -64,17 +64,19 @@ REMEMBER: Be thorough and inferential. Extract every person mentioned and build 
 Remember: You're preserving family legacy with the same care and attention the family would want for their most precious memories.`;
 
 exports.handler = async (event, context) => {
+    let validation;
     try {
         // Comprehensive input validation
-        const validation = validateApiRequest(event);
+        validation = validateApiRequest(event);
         
         // Handle CORS preflight requests
         if (validation.isOptions) {
-            return createOptionsResponse();
+            return createOptionsResponse(validation.allowedOrigin);
         }
         
         // Extract validated data
         const { message, model } = validation.validatedData;
+        const allowedOrigin = validation.allowedOrigin;
 
         // Debug logging with validated inputs
         console.log('=== MEMORY KEEPER DEBUG ===');
@@ -126,12 +128,7 @@ exports.handler = async (event, context) => {
 
         return {
             statusCode: 200,
-            headers: {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type',
-                'Access-Control-Allow-Methods': 'POST, OPTIONS'
-            },
+            headers: createSecureCorsHeaders(allowedOrigin),
             body: JSON.stringify({
                 memories: extractedMemories,
                 debugInfo: {
@@ -148,6 +145,6 @@ exports.handler = async (event, context) => {
 
     } catch (error) {
         console.error('Memory Keeper Function Error:', error);
-        return createErrorResponse(error);
+        return createErrorResponse(error, validation?.allowedOrigin);
     }
 };

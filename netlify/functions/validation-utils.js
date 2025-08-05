@@ -13,6 +13,17 @@ const SECURITY_LIMITS = {
     ALLOWED_HTTP_METHODS: ['POST', 'OPTIONS']
 };
 
+// Allowed origins for CORS (production whitelist)
+const ALLOWED_ORIGINS = [
+    'https://vibe-agents.netlify.app',
+    'https://main--vibe-agents.netlify.app',
+    'http://localhost:3000',
+    'http://localhost:8080',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:8080',
+    'file://' // For local testing
+];
+
 // Allowed Claude models (whitelist)
 const ALLOWED_MODELS = [
     'claude-3-haiku-20240307',
@@ -22,6 +33,32 @@ const ALLOWED_MODELS = [
     'claude-3-5-sonnet-20241022',
     'claude-opus-4-20250514'
 ];
+
+/**
+ * Validate and get secure CORS origin
+ */
+function getSecureCorsOrigin(event) {
+    const origin = event.headers.origin || event.headers.Origin;
+    
+    // If no origin (same-origin request), allow it
+    if (!origin) {
+        return null;
+    }
+    
+    // Check if origin is in whitelist
+    const isAllowed = ALLOWED_ORIGINS.some(allowedOrigin => {
+        if (allowedOrigin === 'file://') {
+            return origin.startsWith('file://');
+        }
+        return origin === allowedOrigin;
+    });
+    
+    if (!isAllowed) {
+        throw new ValidationError(`Origin ${origin} not allowed`, 403);
+    }
+    
+    return origin;
+}
 
 /**
  * Validate HTTP method
@@ -192,6 +229,9 @@ class ValidationError extends Error {
  * Main validation function for API requests
  */
 function validateApiRequest(event) {
+    // Validate CORS origin first
+    const allowedOrigin = getSecureCorsOrigin(event);
+    
     // Validate HTTP method
     validateHttpMethod(event.httpMethod);
     
@@ -199,7 +239,8 @@ function validateApiRequest(event) {
     if (event.httpMethod === 'OPTIONS') {
         return {
             isValid: true,
-            isOptions: true
+            isOptions: true,
+            allowedOrigin
         };
     }
     
@@ -217,6 +258,7 @@ function validateApiRequest(event) {
     return {
         isValid: true,
         isOptions: false,
+        allowedOrigin,
         validatedData: {
             message,
             model,
@@ -226,20 +268,26 @@ function validateApiRequest(event) {
 }
 
 /**
- * Create standardized error response
+ * Create standardized error response with secure CORS
  */
-function createErrorResponse(error) {
+function createErrorResponse(error, allowedOrigin = null) {
     const statusCode = error.statusCode || 500;
     const message = error.name === 'ValidationError' ? error.message : 'Internal server error';
     
+    const headers = {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS'
+    };
+    
+    // Only set CORS origin if it's whitelisted
+    if (allowedOrigin) {
+        headers['Access-Control-Allow-Origin'] = allowedOrigin;
+    }
+    
     return {
         statusCode,
-        headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Headers': 'Content-Type',
-            'Access-Control-Allow-Methods': 'POST, OPTIONS'
-        },
+        headers,
         body: JSON.stringify({
             error: message,
             timestamp: new Date().toISOString()
@@ -248,26 +296,53 @@ function createErrorResponse(error) {
 }
 
 /**
- * Create standardized CORS response for OPTIONS requests
+ * Create standardized CORS response for OPTIONS requests with secure origin
  */
-function createOptionsResponse() {
+function createOptionsResponse(allowedOrigin = null) {
+    const headers = {
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Max-Age': '86400' // 24 hours
+    };
+    
+    // Only set CORS origin if it's whitelisted
+    if (allowedOrigin) {
+        headers['Access-Control-Allow-Origin'] = allowedOrigin;
+    }
+    
     return {
         statusCode: 200,
-        headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Headers': 'Content-Type',
-            'Access-Control-Allow-Methods': 'POST, OPTIONS',
-            'Access-Control-Max-Age': '86400' // 24 hours
-        },
+        headers,
         body: ''
     };
+}
+
+/**
+ * Create secure CORS headers for successful responses
+ */
+function createSecureCorsHeaders(allowedOrigin = null) {
+    const headers = {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS'
+    };
+    
+    // Only set CORS origin if it's whitelisted
+    if (allowedOrigin) {
+        headers['Access-Control-Allow-Origin'] = allowedOrigin;
+    }
+    
+    return headers;
 }
 
 module.exports = {
     validateApiRequest,
     createErrorResponse,
     createOptionsResponse,
+    createSecureCorsHeaders,
+    getSecureCorsOrigin,
     ValidationError,
     SECURITY_LIMITS,
-    ALLOWED_MODELS
+    ALLOWED_MODELS,
+    ALLOWED_ORIGINS
 };

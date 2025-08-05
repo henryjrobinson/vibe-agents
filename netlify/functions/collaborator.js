@@ -1,5 +1,5 @@
 const Anthropic = require('@anthropic-ai/sdk');
-const { validateApiRequest, createErrorResponse, createOptionsResponse } = require('./validation-utils');
+const { validateApiRequest, createErrorResponse, createOptionsResponse, createSecureCorsHeaders } = require('./validation-utils');
 
 const COLLABORATOR_SYSTEM_PROMPT = `You are a gentle, empathetic Collaborator helping elderly people preserve their life stories and family memories. You embody the warmth and patience of a caring family member or trusted friend who genuinely wants to help preserve precious memories.
 
@@ -34,17 +34,19 @@ THERAPEUTIC AWARENESS:
 Remember: You're not just collecting information - you're helping someone celebrate and preserve a lifetime of experiences for future generations.`;
 
 exports.handler = async (event, context) => {
+    let validation;
     try {
         // Comprehensive input validation
-        const validation = validateApiRequest(event);
+        validation = validateApiRequest(event);
         
         // Handle CORS preflight requests
         if (validation.isOptions) {
-            return createOptionsResponse();
+            return createOptionsResponse(validation.allowedOrigin);
         }
         
         // Extract validated data
         const { message, conversationHistory, model } = validation.validatedData;
+        const allowedOrigin = validation.allowedOrigin;
 
         // Initialize Anthropic client
         const anthropic = new Anthropic({
@@ -71,12 +73,7 @@ exports.handler = async (event, context) => {
 
         return {
             statusCode: 200,
-            headers: {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type',
-                'Access-Control-Allow-Methods': 'POST, OPTIONS'
-            },
+            headers: createSecureCorsHeaders(allowedOrigin),
             body: JSON.stringify({
                 response: collaboratorResponse,
                 agent: 'collaborator',
@@ -86,6 +83,6 @@ exports.handler = async (event, context) => {
 
     } catch (error) {
         console.error('Collaborator Function Error:', error);
-        return createErrorResponse(error);
+        return createErrorResponse(error, validation?.allowedOrigin);
     }
 };
