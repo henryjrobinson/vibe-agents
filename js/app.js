@@ -830,7 +830,15 @@ function addMemoryItem(category, item) {
                 break;
                 
             case 'relationships':
-                if (item.connection || item.relationship || item.name) {
+                if (item.person1 && item.person2 && item.type) {
+                    // Handle Claude's actual relationship structure: person1, person2, type
+                    itemDiv.innerHTML = `
+                        <div class="memory-title">${item.person1} ↔ ${item.person2}</div>
+                        <div class="memory-detail">Relationship: ${item.type}</div>
+                        ${item.details ? `<div class="memory-detail">${item.details}</div>` : ''}
+                    `;
+                } else if (item.connection || item.relationship || item.name) {
+                    // Fallback for other relationship formats
                     const title = item.connection || item.relationship || item.name;
                     itemDiv.innerHTML = `
                         <div class="memory-title">${title}</div>
