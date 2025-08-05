@@ -90,7 +90,21 @@ exports.handler = async (event, context) => {
             apiKey: process.env.ANTHROPIC_API_KEY,
         });
 
-        const promptContent = `Extract structured memories from this message: "${message}"`;
+        const promptContent = `Extract structured memories from this message: "${message}"
+
+IMPORTANT: Even for simple statements, extract ALL available information:
+- If someone mentions their name, extract them as a person
+- If someone mentions a place they lived/grew up, extract it as a place
+- If someone mentions family members, extract relationships
+- Be thorough and don't return empty arrays unless there's truly nothing to extract
+
+Example: "My name is John" should extract:
+{"people": [{"name": "John", "relationship": "narrator/storyteller", "details": "Person sharing their story"}], "dates": [], "places": [], "relationships": [], "events": []}
+
+Example: "I grew up in Albany, NY" should extract:
+{"people": [], "dates": [], "places": [{"location": "Albany, NY", "significance": "childhood home", "details": "Place where narrator grew up"}], "relationships": [], "events": []}
+
+Now extract from: "${message}"`;
         console.log('Prompt sent to Claude:', promptContent);
         console.log('System prompt length:', MEMORY_KEEPER_SYSTEM_PROMPT.length);
 
