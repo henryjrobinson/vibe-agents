@@ -24,6 +24,9 @@ const ALLOWED_ORIGINS = [
     'file://' // For local testing
 ];
 
+// Netlify preview deployment pattern
+const NETLIFY_PREVIEW_PATTERN = /^https:\/\/[a-f0-9]+--vibe-agents\.netlify\.app$/;
+
 // Allowed Claude models (whitelist)
 const ALLOWED_MODELS = [
     'claude-3-haiku-20240307',
@@ -48,7 +51,7 @@ function getSecureCorsOrigin(event) {
     
     console.log('Cross-origin request detected, origin:', origin);
     
-    // Check if origin is in whitelist
+    // Check if origin is in whitelist or matches Netlify preview pattern
     const isAllowed = ALLOWED_ORIGINS.some(allowedOrigin => {
         if (allowedOrigin === 'file://') {
             return origin.startsWith('file://');
@@ -56,9 +59,17 @@ function getSecureCorsOrigin(event) {
         return origin === allowedOrigin;
     });
     
-    if (!isAllowed) {
+    // Check if it's a Netlify preview deployment
+    const isNetlifyPreview = NETLIFY_PREVIEW_PATTERN.test(origin);
+    
+    if (!isAllowed && !isNetlifyPreview) {
         console.error('Origin not in whitelist:', origin, 'Allowed origins:', ALLOWED_ORIGINS);
+        console.error('Netlify preview pattern test result:', isNetlifyPreview);
         throw new ValidationError(`Origin ${origin} not allowed`, 403);
+    }
+    
+    if (isNetlifyPreview) {
+        console.log('Netlify preview deployment allowed:', origin);
     }
     
     console.log('Origin allowed:', origin);
