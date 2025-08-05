@@ -90,21 +90,21 @@ exports.handler = async (event, context) => {
             apiKey: process.env.ANTHROPIC_API_KEY,
         });
 
-        const promptContent = `Extract structured memories from this message: "${message}"
+        const promptContent = `You must extract structured information from: "${message}"
 
-IMPORTANT: Even for simple statements, extract ALL available information:
-- If someone mentions their name, extract them as a person
-- If someone mentions a place they lived/grew up, extract it as a place
-- If someone mentions family members, extract relationships
-- Be thorough and don't return empty arrays unless there's truly nothing to extract
+Rules:
+1. If someone says their name, add them to "people" array
+2. If someone mentions a place they lived/grew up, add it to "places" array  
+3. Extract ALL information, don't return empty arrays if there's something to extract
 
-Example: "My name is John" should extract:
-{"people": [{"name": "John", "relationship": "narrator/storyteller", "details": "Person sharing their story"}], "dates": [], "places": [], "relationships": [], "events": []}
+Examples:
+"My name is John" → {"people": [{"name": "John", "relationship": "narrator", "details": "storyteller"}], "dates": [], "places": [], "relationships": [], "events": []}
 
-Example: "I grew up in Albany, NY" should extract:
-{"people": [], "dates": [], "places": [{"location": "Albany, NY", "significance": "childhood home", "details": "Place where narrator grew up"}], "relationships": [], "events": []}
+"I grew up in Boston" → {"people": [], "dates": [], "places": [{"location": "Boston", "significance": "childhood home", "details": "where they grew up"}], "relationships": [], "events": []}
 
-Now extract from: "${message}"`;
+Now extract from: "${message}"
+
+Respond with valid JSON only:`;
         console.log('Prompt sent to Claude:', promptContent);
         console.log('System prompt length:', MEMORY_KEEPER_SYSTEM_PROMPT.length);
 
