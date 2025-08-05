@@ -787,7 +787,15 @@ function addMemoryItem(category, item) {
         // Structured object - format based on category
         switch (category) {
             case 'people':
-                itemDiv.textContent = item.name || item.person || JSON.stringify(item);
+                if (item.name) {
+                    itemDiv.innerHTML = `
+                        <div class="memory-title">${item.name}</div>
+                        ${item.relationship ? `<div class="memory-detail">Relationship: ${item.relationship}</div>` : ''}
+                        ${item.details ? `<div class="memory-detail">${item.details}</div>` : ''}
+                    `;
+                } else {
+                    itemDiv.textContent = item.person || JSON.stringify(item);
+                }
                 break;
                 
             case 'dates':
@@ -827,10 +835,13 @@ function addMemoryItem(category, item) {
                 break;
                 
             case 'events':
-                if (item.event) {
+                if (item.event || item.description) {
+                    const eventTitle = item.event || item.description;
                     itemDiv.innerHTML = `
-                        <div class="memory-title">${item.event}</div>
+                        <div class="memory-title">${eventTitle}</div>
+                        ${item.date ? `<div class="memory-detail">When: ${item.date}</div>` : ''}
                         ${item.participants ? `<div class="memory-detail">Who: ${item.participants}</div>` : ''}
+                        ${item.significance ? `<div class="memory-detail">Significance: ${item.significance}</div>` : ''}
                         ${item.details ? `<div class="memory-detail">${item.details}</div>` : ''}
                     `;
                 } else {
