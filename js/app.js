@@ -9,6 +9,10 @@ let currentSession = {
         events: []
     }
 };
+
+// Secure session management
+const SESSION_STORAGE_KEY = 'story_session';
+let sessionAutoSaveEnabled = true;
 let isTyping = false;
 let memoryDisplayVisible = true;
 let loggingModeEnabled = false;
@@ -16,14 +20,142 @@ let selectedModel = 'claude-opus-4-20250514'; // Default model - Claude 4 Opus (
 let logEntries = [];
 
 // Initialize the application
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     initializeToggles();
     initializeInput();
     initializeButtons();
     initializeModelSelector();
     initializeDebugPanel();
+    await loadSecureSession(); // Load encrypted session data
     showWelcomeModal();
 });
+
+/**
+ * Secure Session Management Functions
+ */
+
+/**
+ * Save current session data with encryption
+ */
+async function saveSecureSession() {
+    if (!sessionAutoSaveEnabled || !window.secureStorage) {
+        return;
+    }
+
+    try {
+        // Only save if there's meaningful data to protect
+        const hasMessages = currentSession.messages.length > 0;
+        const hasMemories = Object.values(currentSession.memories).some(arr => arr.length > 0);
+        
+        if (hasMessages || hasMemories) {
+            await window.secureStorage.setSecureItem(SESSION_STORAGE_KEY, {
+                messages: currentSession.messages,
+                memories: currentSession.memories,
+                timestamp: new Date().toISOString(),
+                version: '1.0'
+            });
+            console.log('🔐 Session data encrypted and saved securely');
+        }
+    } catch (error) {
+        console.error('🚨 Failed to save secure session:', error);
+        // Continue without throwing to avoid breaking the app
+    }
+}
+
+/**
+ * Load and decrypt session data
+ */
+async function loadSecureSession() {
+    if (!window.secureStorage) {
+        console.warn('🚨 Secure storage not available, using default session');
+        return;
+    }
+
+    try {
+        const savedSession = await window.secureStorage.getSecureItem(SESSION_STORAGE_KEY);
+        
+        if (savedSession && savedSession.messages && savedSession.memories) {
+            // Restore session data
+            currentSession.messages = savedSession.messages || [];
+            currentSession.memories = savedSession.memories || {
+                people: [],
+                dates: [],
+                places: [],
+                relationships: [],
+                events: []
+            };
+            
+            console.log('🔐 Session data decrypted and loaded successfully');
+            console.log(`📊 Restored ${currentSession.messages.length} messages and ${Object.values(currentSession.memories).reduce((sum, arr) => sum + arr.length, 0)} memories`);
+            
+            // Restore UI state if there's data
+            if (currentSession.messages.length > 0) {
+                restoreSessionUI();
+            }
+        } else {
+            console.log('🔐 No previous secure session found, starting fresh');
+        }
+    } catch (error) {
+        console.error('🚨 Failed to load secure session:', error);
+        // Continue with empty session rather than breaking the app
+    }
+}
+
+/**
+ * Restore UI state from loaded session data
+ */
+function restoreSessionUI() {
+    try {
+        // Restore chat messages
+        const messagesContainer = document.getElementById('chat-messages');
+        if (messagesContainer && currentSession.messages.length > 0) {
+            messagesContainer.innerHTML = ''; // Clear existing messages
+            
+            currentSession.messages.forEach(message => {
+                addMessage(message.type, message.agent, message.content, {
+                    timestamp: message.timestamp,
+                    skipSave: true // Don't re-save during restoration
+                });
+            });
+        }
+        
+        // Restore memory display
+        updateMemoryDisplay();
+        
+        console.log('🔐 UI state restored from secure session');
+    } catch (error) {
+        console.error('🚨 Failed to restore UI state:', error);
+    }
+}
+
+/**
+ * Clear secure session data
+ */
+async function clearSecureSession() {
+    try {
+        if (window.secureStorage) {
+            window.secureStorage.removeSecureItem(SESSION_STORAGE_KEY);
+            console.log('🔐 Secure session data cleared');
+        }
+    } catch (error) {
+        console.error('🚨 Failed to clear secure session:', error);
+    }
+}
+
+/**
+ * Auto-save session data after changes (debounced)
+ */
+let saveTimeout;
+function scheduleSecureSave() {
+    if (saveTimeout) {
+        clearTimeout(saveTimeout);
+    }
+    
+    // Debounce saves to avoid excessive encryption operations
+    saveTimeout = setTimeout(async () => {
+        await saveSecureSession();
+    }, 1000); // Save 1 second after last change
+}
 
 /**
  * Initialize toggle switches
@@ -532,6 +664,11 @@ function addMessage(type, agent, content, metadata = {}) {
         content,
         timestamp: metadata.timestamp || new Date().toISOString()
     });
+    
+    // Auto-save encrypted session data (unless this is a restoration)
+    if (!metadata.skipSave) {
+        scheduleSecureSave();
+    }
 }
 
 /**
@@ -563,15 +700,22 @@ function updateMemoryDisplay(extractedMemories) {
     }
     
     // Update session memories
+    let memoriesUpdated = false;
     Object.keys(extractedMemories).forEach(category => {
         if (currentSession.memories[category] && Array.isArray(extractedMemories[category])) {
             extractedMemories[category].forEach(item => {
                 if (!currentSession.memories[category].includes(item)) {
                     currentSession.memories[category].push(item);
+                    memoriesUpdated = true;
                 }
             });
         }
     });
+    
+    // Auto-save encrypted session data if memories were updated
+    if (memoriesUpdated) {
+        scheduleSecureSave();
+    }
 }
 
 /**
@@ -765,6 +909,9 @@ function startNewSession() {
     
     // Reset memory display
     resetMemoryDisplay();
+    
+    // Clear secure session storage
+    clearSecureSession();
     
     // Show welcome modal again
     showWelcomeModal();
