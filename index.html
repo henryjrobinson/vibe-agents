@@ -56,8 +56,8 @@
                             Logging Mode
                         </label>
                     </div>
-                    <button class="action-btn" id="new-story-btn" style="margin-left: 15px;">New Story</button>
-                    <button class="action-btn" id="export-btn" style="margin-left: 10px;">Export</button>
+                    <button class="action-btn" id="new-story-btn">New Story</button>
+                    <button class="action-btn" id="export-btn">Export</button>
                 </div>
             </div>
         </div>
@@ -69,7 +69,7 @@
                 </div>
                 
                 <div class="chat-input-area">
-                    <div class="typing-indicator" id="typing-indicator" style="display: none;">
+                    <div class="typing-indicator hidden" id="typing-indicator">
                         <span>Collaborator is thinking</span>
                         <div class="typing-dots">
                             <div class="typing-dot"></div>
@@ -127,10 +127,10 @@
         </div>
     </div>
     
-    <div class="tap-hint" id="tap-hint" style="display: none;">Click anywhere to continue the conversation</div>
-    
+    <div class="tap-hint hidden" id="tap-hint">Click anywhere to continue the conversation</div>
+
     <!-- Logging Panel -->
-    <div class="logging-panel" id="logging-panel" style="display: none;">
+    <div class="logging-panel hidden" id="logging-panel">
         <div class="logging-header">
             <h3>Agent Data Flow Log</h3>
             <div class="logging-controls">

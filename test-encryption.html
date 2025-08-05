@@ -56,11 +56,11 @@
     
     <div class="demo-container">
         <h2>🔐 Encryption Security Tests</h2>
-        <button onclick="runEncryptionTests()">Run Encryption Security Tests</button>
+        <button id="runEncryptionBtn">Run Encryption Security Tests</button>
         <div id="encryptionResults"></div>
         
         <h2>🛡️ Input Validation Security Tests</h2>
-        <button onclick="runValidationTests()">Run Input Validation Tests</button>
+        <button id="runValidationBtn">Run Input Validation Tests</button>
         <div id="validationResults"></div>
     </div>
     
@@ -68,8 +68,8 @@
         <h2>Test 2: SessionStorage Inspection</h2>
         <p>View what's actually stored in the browser's sessionStorage.</p>
         
-        <button onclick="showSessionStorage()">👁️ Inspect SessionStorage</button>
-        <button onclick="clearSessionStorage()">🗑️ Clear SessionStorage</button>
+        <button id="showStorageBtn">👁️ Inspect SessionStorage</button>
+        <button id="clearStorageBtn">🗑️ Clear SessionStorage</button>
         
         <div id="storageResults"></div>
     </div>
@@ -78,7 +78,7 @@
         <h2>Test 3: Security Verification</h2>
         <p>Verify that data cannot be read without proper decryption.</p>
         
-        <button onclick="securityTest()">🛡️ Run Security Test</button>
+        <button id="securityTestBtn">🛡️ Run Security Test</button>
         
         <div id="securityResults"></div>
     </div>
@@ -481,11 +481,24 @@ Overall Security Status: ${!keyAccessible && !containsSensitiveData && encryptio
         
         // Initialize on page load
         window.addEventListener('load', () => {
+            // Add event listeners for CSP compliance
+            document.getElementById('runEncryptionBtn').addEventListener('click', runEncryptionTests);
+            document.getElementById('runValidationBtn').addEventListener('click', runValidationTests);
+            document.getElementById('showStorageBtn').addEventListener('click', showSessionStorage);
+            document.getElementById('clearStorageBtn').addEventListener('click', clearSessionStorage);
+            document.getElementById('securityTestBtn').addEventListener('click', securityTest);
+            
             setTimeout(() => {
                 if (window.secureStorage) {
-                    showResult(testResults, '✅ Encryption system loaded successfully!', 'success');
+                    const testResults = document.getElementById('testResults');
+                    if (testResults) {
+                        showResult(testResults, '✅ Encryption system loaded successfully!', 'success');
+                    }
                 } else {
-                    showResult(testResults, '❌ Encryption system not available!', 'error');
+                    const testResults = document.getElementById('testResults');
+                    if (testResults) {
+                        showResult(testResults, '❌ Encryption system not available!', 'error');
+                    }
                 }
             }, 1000);
         });

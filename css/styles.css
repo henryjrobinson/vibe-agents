@@ -683,3 +683,40 @@ body {
         max-width: 85%;
     }
 }
+
+/* CSP Security Classes */
+.hidden {
+    display: none !important;
+}
+
+/* Button spacing for CSP compliance */
+#new-story-btn {
+    margin-left: 15px;
+}
+
+#export-btn {
+    margin-left: 10px;
+}
+
+/* Additional security-focused utility classes */
+.no-select {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+.secure-input {
+    background: white;
+    border: 2px solid #e1e8ed;
+    border-radius: var(--border-radius-sm);
+    padding: 12px;
+    font-size: 16px;
+    transition: var(--transition-fast);
+}
+
+.secure-input:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
