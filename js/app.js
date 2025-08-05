@@ -799,10 +799,14 @@ function addMemoryItem(category, item) {
                 break;
                 
             case 'dates':
-                if (item.event && item.timeframe) {
+                if (item.event || item.description || item.name) {
+                    const title = item.event || item.description || item.name;
                     itemDiv.innerHTML = `
-                        <div class="memory-title">${item.event}</div>
-                        <div class="memory-detail">When: ${item.timeframe}</div>
+                        <div class="memory-title">${title}</div>
+                        ${item.timeframe ? `<div class="memory-detail">When: ${item.timeframe}</div>` : ''}
+                        ${item.date ? `<div class="memory-detail">Date: ${item.date}</div>` : ''}
+                        ${item.time ? `<div class="memory-detail">Time: ${item.time}</div>` : ''}
+                        ${item.significance ? `<div class="memory-detail">Significance: ${item.significance}</div>` : ''}
                         ${item.details ? `<div class="memory-detail">${item.details}</div>` : ''}
                     `;
                 } else {
@@ -811,26 +815,32 @@ function addMemoryItem(category, item) {
                 break;
                 
             case 'places':
-                if (item.location) {
+                if (item.location || item.place || item.name) {
+                    const title = item.location || item.place || item.name;
                     itemDiv.innerHTML = `
-                        <div class="memory-title">${item.location}</div>
-                        ${item.significance ? `<div class="memory-detail">${item.significance}</div>` : ''}
+                        <div class="memory-title">${title}</div>
+                        ${item.significance ? `<div class="memory-detail">Significance: ${item.significance}</div>` : ''}
+                        ${item.type ? `<div class="memory-detail">Type: ${item.type}</div>` : ''}
+                        ${item.description ? `<div class="memory-detail">${item.description}</div>` : ''}
                         ${item.details ? `<div class="memory-detail">${item.details}</div>` : ''}
                     `;
                 } else {
-                    itemDiv.textContent = item.place || item.name || JSON.stringify(item);
+                    itemDiv.textContent = JSON.stringify(item);
                 }
                 break;
                 
             case 'relationships':
-                if (item.connection && item.nature) {
+                if (item.connection || item.relationship || item.name) {
+                    const title = item.connection || item.relationship || item.name;
                     itemDiv.innerHTML = `
-                        <div class="memory-title">${item.connection}</div>
-                        <div class="memory-detail">Relationship: ${item.nature}</div>
+                        <div class="memory-title">${title}</div>
+                        ${item.nature ? `<div class="memory-detail">Type: ${item.nature}</div>` : ''}
+                        ${item.type ? `<div class="memory-detail">Type: ${item.type}</div>` : ''}
+                        ${item.description ? `<div class="memory-detail">${item.description}</div>` : ''}
                         ${item.details ? `<div class="memory-detail">${item.details}</div>` : ''}
                     `;
                 } else {
-                    itemDiv.textContent = item.relationship || item.person || JSON.stringify(item);
+                    itemDiv.textContent = item.person || JSON.stringify(item);
                 }
                 break;
                 
