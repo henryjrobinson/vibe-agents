@@ -3,17 +3,15 @@
  * Uses Web Crypto API with AES-GCM for encrypting sensitive data in sessionStorage
  */
 
+// WeakMap for truly private key storage - completely inaccessible from outside
+const privateKeys = new WeakMap();
+const keyStatus = new WeakMap();
+
 class SecureStorage {
     constructor() {
-        // Use closure to hide encryption key - key is not accessible as a property
-        let encryptionKey = null;
-        let keyGenerated = false;
-        
-        // Private methods using closure scope
-        this._getKey = () => encryptionKey;
-        this._setKey = (key) => { encryptionKey = key; };
-        this._isKeyGenerated = () => keyGenerated;
-        this._setKeyGenerated = (status) => { keyGenerated = status; };
+        // Initialize private storage - no accessible methods or properties
+        privateKeys.set(this, null);
+        keyStatus.set(this, false);
     }
 
     /**
@@ -29,8 +27,8 @@ class SecureStorage {
                 false, // Not extractable for security
                 ['encrypt', 'decrypt']
             );
-            this._setKey(key);
-            this._setKeyGenerated(true);
+            privateKeys.set(this, key);
+            keyStatus.set(this, true);
             console.log('🔐 Encryption key generated successfully');
         } catch (error) {
             console.error('Failed to generate encryption key:', error);
@@ -44,7 +42,7 @@ class SecureStorage {
      * @returns {string} - Base64 encoded encrypted data with IV
      */
     async encrypt(plaintext) {
-        if (!this._isKeyGenerated()) {
+        if (!keyStatus.get(this)) {
             await this.generateKey();
         }
 
@@ -62,7 +60,7 @@ class SecureStorage {
                     name: 'AES-GCM',
                     iv: iv
                 },
-                this._getKey(),
+                privateKeys.get(this),
                 data
             );
 
@@ -85,7 +83,7 @@ class SecureStorage {
      * @returns {string} - Decrypted plaintext
      */
     async decrypt(encryptedData) {
-        if (!this._isKeyGenerated()) {
+        if (!keyStatus.get(this)) {
             throw new Error('Encryption key not available');
         }
 
@@ -105,7 +103,7 @@ class SecureStorage {
                     name: 'AES-GCM',
                     iv: iv
                 },
-                this._getKey(),
+                privateKeys.get(this),
                 encrypted
             );
 

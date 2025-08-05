@@ -206,13 +206,29 @@ Error: ${error.message}`, 'error');
                 // Test 1: Verify encryption keys are not accessible
                 let keyAccessible = false;
                 try {
-                    // Try multiple ways to access the key
+                    // Try multiple attack vectors to access the key
                     const key1 = window.secureStorage.encryptionKey;
                     const key2 = window.secureStorage._getKey;
                     const key3 = Object.getOwnPropertyNames(window.secureStorage).includes('encryptionKey');
+                    const key4 = Object.getOwnPropertyDescriptors(window.secureStorage);
+                    const key5 = window.secureStorage.constructor.prototype;
                     
-                    // If any of these return the actual key, it's accessible
-                    keyAccessible = !!key1 || (key2 && typeof key2() !== 'undefined') || key3;
+                    // Try to access WeakMap (should be impossible)
+                    let weakMapAccess = false;
+                    try {
+                        // These should all fail or return undefined
+                        const props = Object.getOwnPropertyNames(window.secureStorage);
+                        weakMapAccess = props.some(prop => prop.includes('key') || prop.includes('Key'));
+                    } catch (e) {
+                        weakMapAccess = false;
+                    }
+                    
+                    // If any of these return the actual key or key access, it's accessible
+                    keyAccessible = !!key1 || 
+                                   (key2 && typeof key2 === 'function') || 
+                                   key3 || 
+                                   (key4 && Object.keys(key4).some(k => k.includes('key'))) ||
+                                   weakMapAccess;
                 } catch (e) {
                     keyAccessible = false;
                 }
