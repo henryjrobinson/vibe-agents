@@ -40,10 +40,13 @@ const ALLOWED_MODELS = [
 function getSecureCorsOrigin(event) {
     const origin = event.headers.origin || event.headers.Origin;
     
-    // If no origin (same-origin request), allow it
+    // If no origin (same-origin request), allow it - this is normal for API calls from same domain
     if (!origin) {
+        console.log('Same-origin request detected (no origin header) - allowing');
         return null;
     }
+    
+    console.log('Cross-origin request detected, origin:', origin);
     
     // Check if origin is in whitelist
     const isAllowed = ALLOWED_ORIGINS.some(allowedOrigin => {
@@ -54,9 +57,11 @@ function getSecureCorsOrigin(event) {
     });
     
     if (!isAllowed) {
+        console.error('Origin not in whitelist:', origin, 'Allowed origins:', ALLOWED_ORIGINS);
         throw new ValidationError(`Origin ${origin} not allowed`, 403);
     }
     
+    console.log('Origin allowed:', origin);
     return origin;
 }
 
