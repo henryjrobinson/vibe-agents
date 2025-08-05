@@ -55,15 +55,13 @@
     <h1>🔐 Encryption Security Demonstration</h1>
     
     <div class="demo-container">
-        <h2>Test 1: Encryption/Decryption Functionality</h2>
-        <p>This test demonstrates that sensitive data is properly encrypted before storage.</p>
-        
-        <input type="text" id="testInput" placeholder="Enter sensitive test data (e.g., 'My name is John Doe')" style="width: 100%; padding: 8px; margin: 10px 0;">
-        
-        <button onclick="testEncryption()">🔐 Test Encryption</button>
-        <button onclick="clearTest()">🗑️ Clear Test</button>
-        
+        <h2>🔐 Encryption Security Tests</h2>
+        <button onclick="runEncryptionTests()">Run Encryption Security Tests</button>
         <div id="encryptionResults"></div>
+        
+        <h2>🛡️ Input Validation Security Tests</h2>
+        <button onclick="runValidationTests()">Run Input Validation Tests</button>
+        <div id="validationResults"></div>
     </div>
     
     <div class="demo-container">
@@ -283,6 +281,201 @@ Overall Security Status: ${!keyAccessible && !containsSensitiveData && encryptio
             } else {
                 container.innerHTML = '';
                 container.appendChild(div);
+            }
+        }
+        
+        // Input Validation Security Tests
+        async function runValidationTests() {
+            const validationResults = document.getElementById('validationResults');
+            validationResults.innerHTML = '<div class="test-result info">Running input validation security tests...</div>';
+            
+            const tests = [
+                await testMessageValidation(),
+                await testRequestSizeLimits(),
+                await testModelValidation(),
+                await testMaliciousInputs(),
+                await testConversationHistoryValidation(),
+                await testHttpMethodValidation()
+            ];
+            
+            const passedTests = tests.filter(t => t.passed).length;
+            const totalTests = tests.length;
+            
+            let results = `🛡️ INPUT VALIDATION SECURITY TEST RESULTS:\n\n`;
+            tests.forEach((test, index) => {
+                results += `Test ${index + 1} - ${test.name}:\n${test.passed ? '✅ PASS' : '❌ FAIL'}: ${test.message}\n\n`;
+            });
+            
+            results += `Overall Validation Security: ${passedTests === totalTests ? '✅ SECURE' : '⚠️ NEEDS ATTENTION'} (${passedTests}/${totalTests} tests passed)`;
+            
+            showResult(validationResults, results, passedTests === totalTests ? 'success' : 'error');
+        }
+        
+        async function testMessageValidation() {
+            try {
+                // Test empty message
+                const emptyResponse = await fetch('/api/collaborator', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: '' })
+                });
+                
+                if (emptyResponse.status !== 400) {
+                    return { name: 'Empty Message Validation', passed: false, message: 'Empty messages should be rejected with 400 status' };
+                }
+                
+                // Test null message
+                const nullResponse = await fetch('/api/collaborator', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: null })
+                });
+                
+                if (nullResponse.status !== 400) {
+                    return { name: 'Null Message Validation', passed: false, message: 'Null messages should be rejected with 400 status' };
+                }
+                
+                // Test non-string message
+                const numberResponse = await fetch('/api/collaborator', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: 12345 })
+                });
+                
+                if (numberResponse.status !== 400) {
+                    return { name: 'Non-String Message Validation', passed: false, message: 'Non-string messages should be rejected with 400 status' };
+                }
+                
+                return { name: 'Message Type Validation', passed: true, message: 'Empty, null, and non-string messages properly rejected' };
+                
+            } catch (error) {
+                return { name: 'Message Validation', passed: false, message: `Test failed: ${error.message}` };
+            }
+        }
+        
+        async function testRequestSizeLimits() {
+            try {
+                // Test oversized message (>10KB)
+                const largeMessage = 'A'.repeat(15000); // 15KB message
+                const response = await fetch('/api/collaborator', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: largeMessage })
+                });
+                
+                if (response.status !== 413) {
+                    return { name: 'Request Size Limits', passed: false, message: 'Oversized requests should be rejected with 413 status' };
+                }
+                
+                return { name: 'Request Size Limits', passed: true, message: 'Oversized requests properly rejected' };
+                
+            } catch (error) {
+                return { name: 'Request Size Limits', passed: false, message: `Test failed: ${error.message}` };
+            }
+        }
+        
+        async function testModelValidation() {
+            try {
+                // Test invalid model
+                const response = await fetch('/api/collaborator', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        message: 'test', 
+                        model: 'invalid-model-name' 
+                    })
+                });
+                
+                if (response.status !== 400) {
+                    return { name: 'Model Validation', passed: false, message: 'Invalid model names should be rejected with 400 status' };
+                }
+                
+                return { name: 'Model Validation', passed: true, message: 'Invalid model names properly rejected' };
+                
+            } catch (error) {
+                return { name: 'Model Validation', passed: false, message: `Test failed: ${error.message}` };
+            }
+        }
+        
+        async function testMaliciousInputs() {
+            try {
+                const maliciousInputs = [
+                    '<script>alert("XSS")</script>',
+                    'javascript:alert("XSS")',
+                    'eval("malicious code")',
+                    '<iframe src="evil.com"></iframe>',
+                    'function() { return "malicious"; }'
+                ];
+                
+                for (const maliciousInput of maliciousInputs) {
+                    const response = await fetch('/api/collaborator', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: maliciousInput })
+                    });
+                    
+                    if (response.status !== 400) {
+                        return { name: 'Malicious Input Protection', passed: false, message: 'Malicious input should be rejected' };
+                    }
+                }
+                
+                return { name: 'Malicious Input Protection', passed: true, message: 'Script injections and malicious patterns properly blocked' };
+                
+            } catch (error) {
+                return { name: 'Malicious Input Protection', passed: false, message: 'Test failed: ' + error.message };
+            }
+        }
+        
+        async function testConversationHistoryValidation() {
+            try {
+                // Test oversized conversation history
+                const largeHistory = Array(25).fill({ role: 'user', content: 'test message' });
+                const response = await fetch('/api/collaborator', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        message: 'test',
+                        conversationHistory: largeHistory
+                    })
+                });
+                
+                if (response.status !== 413) {
+                    return { name: 'Conversation History Limits', passed: false, message: 'Oversized conversation history should be rejected with 413 status' };
+                }
+                
+                return { name: 'Conversation History Limits', passed: true, message: 'Oversized conversation history properly rejected' };
+                
+            } catch (error) {
+                return { name: 'Conversation History Validation', passed: false, message: `Test failed: ${error.message}` };
+            }
+        }
+        
+        async function testHttpMethodValidation() {
+            try {
+                // Test GET request (should be rejected)
+                const getResponse = await fetch('/api/collaborator', {
+                    method: 'GET'
+                });
+                
+                if (getResponse.status !== 405) {
+                    return { name: 'HTTP Method Validation', passed: false, message: 'GET requests should be rejected with 405 status' };
+                }
+                
+                // Test PUT request (should be rejected)
+                const putResponse = await fetch('/api/collaborator', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: 'test' })
+                });
+                
+                if (putResponse.status !== 405) {
+                    return { name: 'HTTP Method Validation', passed: false, message: 'PUT requests should be rejected with 405 status' };
+                }
+                
+                return { name: 'HTTP Method Validation', passed: true, message: 'Invalid HTTP methods properly rejected' };
+                
+            } catch (error) {
+                return { name: 'HTTP Method Validation', passed: false, message: `Test failed: ${error.message}` };
             }
         }
         

@@ -1,4 +1,5 @@
 const Anthropic = require('@anthropic-ai/sdk');
+const { validateApiRequest, createErrorResponse, createOptionsResponse } = require('./validation-utils');
 
 const COLLABORATOR_SYSTEM_PROMPT = `You are a gentle, empathetic Collaborator helping elderly people preserve their life stories and family memories. You embody the warmth and patience of a caring family member or trusted friend who genuinely wants to help preserve precious memories.
 
@@ -33,30 +34,24 @@ THERAPEUTIC AWARENESS:
 Remember: You're not just collecting information - you're helping someone celebrate and preserve a lifetime of experiences for future generations.`;
 
 exports.handler = async (event, context) => {
-    // Only allow POST requests
-    if (event.httpMethod !== 'POST') {
-        return {
-            statusCode: 405,
-            body: JSON.stringify({ error: 'Method not allowed' })
-        };
-    }
-
     try {
-        const { message, conversationHistory = [], model = 'claude-opus-4-20250514' } = JSON.parse(event.body);
-
-        if (!message || typeof message !== 'string') {
-            return {
-                statusCode: 400,
-                body: JSON.stringify({ error: 'Message is required and must be a string' })
-            };
+        // Comprehensive input validation
+        const validation = validateApiRequest(event);
+        
+        // Handle CORS preflight requests
+        if (validation.isOptions) {
+            return createOptionsResponse();
         }
+        
+        // Extract validated data
+        const { message, conversationHistory, model } = validation.validatedData;
 
         // Initialize Anthropic client
         const anthropic = new Anthropic({
             apiKey: process.env.ANTHROPIC_API_KEY,
         });
 
-        // Build conversation context
+        // Build conversation context with validated history
         const messages = [
             ...conversationHistory.slice(-6), // Keep last 6 messages for context
             {
@@ -91,12 +86,6 @@ exports.handler = async (event, context) => {
 
     } catch (error) {
         console.error('Collaborator Function Error:', error);
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ 
-                error: 'Failed to generate collaborator response',
-                details: error.message
-            })
-        };
+        return createErrorResponse(error);
     }
 };

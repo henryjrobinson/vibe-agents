@@ -1,4 +1,5 @@
 const Anthropic = require('@anthropic-ai/sdk');
+const { validateApiRequest, createErrorResponse, createOptionsResponse } = require('./validation-utils');
 
 const MEMORY_KEEPER_SYSTEM_PROMPT = `You are a Memory Keeper agent that extracts and organizes structured information from elderly storytelling conversations. You work alongside the Collaborator to preserve family histories with exceptional attention to detail, privacy, and generational patterns.
 
@@ -63,31 +64,24 @@ REMEMBER: Be thorough and inferential. Extract every person mentioned and build 
 Remember: You're preserving family legacy with the same care and attention the family would want for their most precious memories.`;
 
 exports.handler = async (event, context) => {
-    // Only allow POST requests
-    if (event.httpMethod !== 'POST') {
-        return {
-            statusCode: 405,
-            body: JSON.stringify({ error: 'Method not allowed' })
-        };
-    }
-
     try {
-        const { message, model = 'claude-opus-4-20250514' } = JSON.parse(event.body);
-
-        // Debug logging
-        console.log('=== MEMORY KEEPER DEBUG ===');
-        console.log('Input message:', message);
-        console.log('Selected model:', model);
-        console.log('Message length:', message?.length);
-        console.log('Message type:', typeof message);
-
-        if (!message || typeof message !== 'string') {
-            console.log('ERROR: Invalid message format');
-            return {
-                statusCode: 400,
-                body: JSON.stringify({ error: 'Message is required and must be a string' })
-            };
+        // Comprehensive input validation
+        const validation = validateApiRequest(event);
+        
+        // Handle CORS preflight requests
+        if (validation.isOptions) {
+            return createOptionsResponse();
         }
+        
+        // Extract validated data
+        const { message, model } = validation.validatedData;
+
+        // Debug logging with validated inputs
+        console.log('=== MEMORY KEEPER DEBUG ===');
+        console.log('Validated message:', message);
+        console.log('Validated model:', model);
+        console.log('Message length:', message.length);
+        console.log('Message type:', typeof message);
 
         // Initialize Anthropic client
         const anthropic = new Anthropic({
@@ -154,12 +148,6 @@ exports.handler = async (event, context) => {
 
     } catch (error) {
         console.error('Memory Keeper Function Error:', error);
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ 
-                error: 'Failed to extract memories',
-                details: error.message
-            })
-        };
+        return createErrorResponse(error);
     }
 };
