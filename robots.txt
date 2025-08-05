@@ -1,0 +1,5 @@
+User-agent: *
+Disallow: /
+
+# Private testing site - not for public indexing
+# This site is currently in development and testing phase
