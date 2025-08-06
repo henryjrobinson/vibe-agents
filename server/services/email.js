@@ -43,7 +43,7 @@ class EmailService {
             throw new Error('Email service not configured');
         }
 
-        const magicLinkUrl = `${process.env.CLIENT_URL || 'http://localhost:3000'}/auth/verify?token=${token}`;
+        const magicLinkUrl = `${process.env.CLIENT_URL || 'http://localhost:8080'}/login.html?token=${token}`;
         const displayName = userName || email.split('@')[0];
 
         const subject = 'Your Vibe-Agents Login Link';

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Story Collection - AI Agents for Capturing Life Stories">
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+    <title>Story Collection - Share Your Life Stories with AI</title>
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://story-collection.netlify.app/">
+    <meta property="og:title" content="Story Collection - AI Agents for Capturing Life Stories">
+    <meta property="og:description" content="Share your life stories with AI - Collaborator and Memory Keeper agents help capture and organize your memories">
+    <meta property="og:site_name" content="Story Collection">
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://story-collection.netlify.app/">
+    <meta property="twitter:title" content="Story Collection - AI Agents for Capturing Life Stories">
+    <meta property="twitter:description" content="Share your life stories with AI - Collaborator and Memory Keeper agents help capture and organize your memories">
+    
+    <link rel="stylesheet" href="css/splash.css">
+    
+    <!-- Authentication and Backend Services -->
+    <script src="js/auth.js"></script>
+    <script src="js/conversation-service.js"></script>
+</head>
+<body>
+    <!-- Background Video Container -->
+    <div class="video-background">
+        <video id="background-video" autoplay muted loop playsinline>
+            <!-- Video source will be added when you provide the video -->
+            <!-- <source src="assets/background-video.mp4" type="video/mp4"> -->
+        </video>
+        <div class="video-overlay"></div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="splash-container">
+        <!-- Header -->
+        <header class="splash-header">
+            <div class="logo">
+                <h1>Story Collection</h1>
+                <p class="tagline">Preserve your memories with AI</p>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="splash-main">
+            <!-- Login Step -->
+            <div class="auth-step active" id="step-login">
+                <div class="content-card">
+                    <div class="card-header">
+                        <h2>Welcome to Story Collection</h2>
+                        <p>Share your life stories with AI agents who listen, understand, and help preserve your precious memories.</p>
+                    </div>
+
+                    <form id="magic-link-form" class="login-form">
+                        <div class="form-group">
+                            <label for="email-input">Email Address</label>
+                            <input 
+                                type="email" 
+                                id="email-input" 
+                                class="form-input" 
+                                placeholder="Enter your email address"
+                                required
+                            >
+                        </div>
+                        <button type="submit" class="primary-btn" id="request-magic-link-btn">
+                            <span class="btn-text">Get Started</span>
+                            <span class="btn-loading hidden">Sending...</span>
+                        </button>
+                    </form>
+
+                    <div class="features-grid">
+                        <div class="feature">
+                            <div class="feature-icon">🤝</div>
+                            <h3>AI Collaborator</h3>
+                            <p>Thoughtful questions and empathetic conversation to help you share your stories naturally.</p>
+                        </div>
+                        <div class="feature">
+                            <div class="feature-icon">🧠</div>
+                            <h3>Memory Keeper</h3>
+                            <p>Automatically extracts and organizes people, places, dates, and relationships from your stories.</p>
+                        </div>
+                        <div class="feature">
+                            <div class="feature-icon">🔒</div>
+                            <h3>Secure & Private</h3>
+                            <p>Your stories are encrypted and stored securely. Only you have access to your memories.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Verifying Step -->
+            <div class="auth-step" id="step-verifying">
+                <div class="content-card">
+                    <div class="card-header">
+                        <h2>Verifying Magic Link</h2>
+                        <p>Please wait while we verify your magic link and sign you in...</p>
+                    </div>
+
+                    <div class="waiting-animation">
+                        <div class="email-icon">🔗</div>
+                        <div class="pulse-animation"></div>
+                        <p class="waiting-text">Verifying your magic link...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Waiting Step -->
+            <div class="auth-step" id="step-waiting">
+                <div class="content-card">
+                    <div class="card-header">
+                        <h2>Check Your Email</h2>
+                        <p>We've sent you a secure magic link. Click the link in your email to sign in.</p>
+                    </div>
+
+                    <div class="waiting-animation">
+                        <div class="email-icon">📧</div>
+                        <div class="pulse-animation"></div>
+                        <p class="waiting-text">Waiting for you to click the magic link...</p>
+                    </div>
+
+                    <div class="auth-actions">
+                        <button class="secondary-btn" id="resend-magic-link-btn">
+                            Resend Magic Link
+                        </button>
+                        <button class="secondary-btn" id="change-email-btn">
+                            Use Different Email
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Success Step -->
+            <div class="auth-step" id="step-success">
+                <div class="content-card">
+                    <div class="card-header">
+                        <h2>Welcome Back!</h2>
+                        <p>You're now signed in and ready to share your stories.</p>
+                    </div>
+
+                    <div class="success-animation">
+                        <div class="success-icon">✅</div>
+                        <p class="success-text">Authentication successful!</p>
+                    </div>
+
+                    <button class="primary-btn" id="continue-to-app-btn">
+                        Start Sharing Your Stories
+                    </button>
+                </div>
+            </div>
+
+            <!-- Error Step -->
+            <div class="auth-step" id="step-error">
+                <div class="content-card">
+                    <div class="card-header">
+                        <h2>Something Went Wrong</h2>
+                        <p id="error-message">We encountered an issue. Please try again.</p>
+                    </div>
+
+                    <div class="error-animation">
+                        <div class="error-icon">❌</div>
+                    </div>
+
+                    <button class="primary-btn" id="retry-auth-btn">
+                        Try Again
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="splash-footer">
+            <p>&copy; 2025 Story Collection. Your memories, preserved with care.</p>
+        </footer>
+    </div>
+
+    <script src="js/splash.js"></script>
+</body>
+</html>

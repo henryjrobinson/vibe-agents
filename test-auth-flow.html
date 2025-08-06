@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication Flow Test</title>
+    <link rel="stylesheet" href="css/styles.css">
+    
+    <!-- Authentication and Backend Services -->
+    <script src="js/auth.js"></script>
+    <script src="js/conversation-service.js"></script>
+    <script src="js/auth-ui.js"></script>
+    
+    <!-- Crypto utilities for secure data storage (legacy) -->
+    <script src="js/crypto-utils.js"></script>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <div class="header-left">
+                <div class="header-title">Story Collection - Auth Test</div>
+                <div class="header-subtitle">Testing authentication flow</div>
+            </div>
+            <div class="user-info hidden" id="user-info">
+                <span class="user-email" id="user-email"></span>
+                <button class="logout-btn" id="logout-btn">Sign Out</button>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="chat-section">
+                <div class="chat-messages" id="chat-messages">
+                    <div class="message ai-message">
+                        <div class="avatar collaborator-avatar">🤖</div>
+                        <div class="message-content">
+                            Welcome! This is a test page to verify the authentication flow works correctly.
+                            <br><br>
+                            <strong>Expected behavior:</strong>
+                            <ol>
+                                <li>Authentication modal should appear asking for your email</li>
+                                <li>After entering email, you should get a "Check Your Email" screen</li>
+                                <li>For testing, you can manually trigger the welcome modal</li>
+                                <li>The "Start Sharing Your Story" button should work</li>
+                            </ol>
+                        </div>
+                        <div class="message-meta">Test Message</div>
+                    </div>
+                </div>
+                
+                <div class="chat-input-area">
+                    <div class="typing-indicator hidden" id="typing-indicator">
+                        <span>Collaborator is thinking</span>
+                        <div class="typing-dots">
+                            <div class="typing-dot"></div>
+                            <div class="typing-dot"></div>
+                            <div class="typing-dot"></div>
+                        </div>
+                    </div>
+                    <div class="input-container">
+                        <textarea 
+                            id="message-input" 
+                            class="message-input" 
+                            placeholder="Type your message here..."
+                            rows="3"
+                        ></textarea>
+                        <button class="send-btn" id="send-btn">Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Test Controls -->
+    <div style="position: fixed; top: 10px; right: 10px; background: white; padding: 15px; border: 2px solid #3498db; border-radius: 10px; z-index: 9999;">
+        <h4>🧪 Test Controls</h4>
+        <button onclick="testShowAuthModal()" style="display: block; margin: 5px 0; padding: 8px 12px;">Show Auth Modal</button>
+        <button onclick="testShowWelcomeModal()" style="display: block; margin: 5px 0; padding: 8px 12px;">Show Welcome Modal</button>
+        <button onclick="testCheckAuth()" style="display: block; margin: 5px 0; padding: 8px 12px;">Check Auth Status</button>
+        <button onclick="clearStorage()" style="display: block; margin: 5px 0; padding: 8px 12px; background: #e74c3c; color: white;">Clear Storage</button>
+        <div id="test-status" style="margin-top: 10px; font-size: 12px;"></div>
+    </div>
+
+    <!-- Welcome Modal -->
+    <div class="welcome-modal hidden" id="welcome-modal">
+        <div class="modal-content">
+            <h2>Welcome to Story Collection</h2>
+            <p>I'm your AI Collaborator, here to help you share your life stories. Together with the Memory Keeper, we'll capture and organize your precious memories.</p>
+            <div class="modal-features">
+                <div class="feature">
+                    <span class="feature-icon">🤝</span>
+                    <div>
+                        <strong>Collaborator Agent</strong>
+                        <p>Asks thoughtful questions and guides the conversation</p>
+                    </div>
+                </div>
+                <div class="feature">
+                    <span class="feature-icon">🧠</span>
+                    <div>
+                        <strong>Memory Keeper</strong>
+                        <p>Extracts and organizes people, places, dates, and events</p>
+                    </div>
+                </div>
+            </div>
+            <button class="start-btn" id="start-story-btn">Start Sharing Your Story</button>
+        </div>
+    </div>
+
+    <script>
+        // Test functions
+        function testShowAuthModal() {
+            console.log('🧪 Testing auth modal...');
+            if (window.authUI) {
+                window.authUI.showModal();
+                updateTestStatus('Auth modal triggered');
+            } else {
+                updateTestStatus('❌ authUI not available');
+            }
+        }
+        
+        function testShowWelcomeModal() {
+            console.log('🧪 Testing welcome modal...');
+            const modal = document.getElementById('welcome-modal');
+            const startBtn = document.getElementById('start-story-btn');
+            
+            if (modal) {
+                modal.classList.remove('hidden');
+                updateTestStatus('Welcome modal shown');
+                
+                // Set up the button click handler
+                if (startBtn) {
+                    startBtn.onclick = function() {
+                        console.log('🚀 Start Story button clicked!');
+                        modal.classList.add('hidden');
+                        
+                        // Add test message
+                        const messagesContainer = document.getElementById('chat-messages');
+                        if (messagesContainer) {
+                            const testMessage = document.createElement('div');
+                            testMessage.className = 'message ai-message';
+                            testMessage.innerHTML = `
+                                <div class="avatar collaborator-avatar">🤖</div>
+                                <div class="message-content">Great! The "Start Sharing Your Story" button is working correctly. You can now start typing your message below.</div>
+                                <div class="message-meta">${new Date().toLocaleTimeString()}</div>
+                            `;
+                            messagesContainer.appendChild(testMessage);
+                            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                        }
+                        
+                        // Focus input
+                        const messageInput = document.getElementById('message-input');
+                        if (messageInput) {
+                            messageInput.focus();
+                            messageInput.placeholder = 'Tell me about a memory you\'d like to share...';
+                        }
+                        
+                        updateTestStatus('✅ Start Story button working!');
+                    };
+                }
+            } else {
+                updateTestStatus('❌ Welcome modal not found');
+            }
+        }
+        
+        function testCheckAuth() {
+            console.log('🧪 Testing auth status...');
+            if (window.authService) {
+                const isAuth = window.authService.isAuthenticated();
+                updateTestStatus(`Auth status: ${isAuth ? '✅ Authenticated' : '❌ Not authenticated'}`);
+            } else {
+                updateTestStatus('❌ authService not available');
+            }
+        }
+        
+        function clearStorage() {
+            localStorage.clear();
+            sessionStorage.clear();
+            updateTestStatus('🗑️ Storage cleared - refresh to test first-time user flow');
+        }
+        
+        function updateTestStatus(message) {
+            const status = document.getElementById('test-status');
+            if (status) {
+                status.innerHTML = `<strong>${new Date().toLocaleTimeString()}:</strong> ${message}`;
+            }
+            console.log('Test Status:', message);
+        }
+
+        // Initialize test page
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('🧪 Test page loaded');
+            updateTestStatus('Test page loaded - services initializing...');
+            
+            // Wait for services
+            let attempts = 0;
+            const checkServices = setInterval(() => {
+                attempts++;
+                if (window.authService && window.conversationService && window.authUI) {
+                    clearInterval(checkServices);
+                    updateTestStatus('✅ All services loaded');
+                    
+                    // Check if user should see auth modal
+                    setTimeout(async () => {
+                        if (!window.authService.isAuthenticated()) {
+                            updateTestStatus('🔐 User not authenticated - auth modal should appear');
+                            // Trigger authentication check
+                            const isAuth = await window.authUI.checkAuthenticationStatus();
+                            if (!isAuth) {
+                                updateTestStatus('🔑 Forcing auth modal to show...');
+                                window.authUI.showModal();
+                            }
+                        } else {
+                            updateTestStatus('✅ User already authenticated');
+                        }
+                    }, 1000);
+                } else if (attempts > 50) { // 5 seconds timeout
+                    clearInterval(checkServices);
+                    updateTestStatus('❌ Services failed to load');
+                }
+            }, 100);
+        });
+    </script>
+</body>
+</html>

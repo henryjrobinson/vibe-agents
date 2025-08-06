@@ -2,13 +2,21 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-require('dotenv').config();
+// Load environment variables with .env file taking priority over system variables
+require('dotenv').config({ override: true });
+
+// Ensure we're using the correct .env file path (from project root)
+const path = require('path');
+require('dotenv').config({ 
+    path: path.join(__dirname, '../.env'),
+    override: true 
+});
 
 const { healthCheck, closePool } = require('./config/database');
 
 // Initialize Express app
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.NODE_ENV === 'test' ? 0 : (process.env.PORT || 3001); // Use random port for tests
 const HOST = process.env.HOST || 'localhost';
 
 // Security middleware
@@ -26,15 +34,33 @@ app.use(helmet({
             frameSrc: ["'none'"],
         },
     },
+    frameguard: { action: 'deny' }, // Explicitly set X-Frame-Options to DENY
     crossOriginEmbedderPolicy: false
 }));
 
-// CORS configuration
+// CORS configuration - Allow all origins for development
 const corsOptions = {
-    origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:3000'],
-    credentials: process.env.CORS_CREDENTIALS === 'true',
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        
+        // Allow localhost on any port for development
+        if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+            return callback(null, true);
+        }
+        
+        // Allow file:// protocol for local testing
+        if (origin.startsWith('file://')) {
+            return callback(null, true);
+        }
+        
+        // For production, you'd check against a whitelist
+        return callback(null, true); // Allow all for development
+    },
+    credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    optionsSuccessStatus: 200 // Some legacy browsers choke on 204
 };
 
 app.use(cors(corsOptions));
@@ -136,14 +162,17 @@ const gracefulShutdown = async (signal) => {
     }, 10000);
 };
 
-// Start server
-const server = app.listen(PORT, HOST, () => {
-    console.log('🚀 Vibe-Agents Server Started');
-    console.log(`📍 Server running at http://${HOST}:${PORT}`);
-    console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
-    console.log(`🔒 CORS Origins: ${corsOptions.origin.join(', ')}`);
-    console.log('📊 Health check available at /health');
-});
+// Start server (only if not in test environment or not being imported)
+let server;
+if (process.env.NODE_ENV !== 'test' && require.main === module) {
+    server = app.listen(PORT, HOST, () => {
+        console.log('🚀 Vibe-Agents Server Started');
+        console.log(`📍 Server running at http://${HOST}:${PORT}`);
+        console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
+        console.log(`🔒 CORS Origins: Dynamic (localhost and file:// allowed for development)`);
+        console.log('📊 Health check available at /health');
+    });
+}
 
 // Handle shutdown signals
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

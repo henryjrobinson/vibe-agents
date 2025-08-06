@@ -69,25 +69,30 @@ const createUserSession = async (userId, userAgent, ipAddress) => {
     const sessionToken = generateJWT({ userId, type: 'session' });
     const expiresAt = new Date(Date.now() + (30 * 24 * 60 * 60 * 1000)); // 30 days
     
-    // Store session in database
-    await query(
-        'INSERT INTO user_sessions (user_id, session_token, expires_at, user_agent, ip_address) VALUES ($1, $2, $3, $4, $5)',
+    // Store session in database and return the full session object
+    const result = await query(
+        'INSERT INTO user_sessions (user_id, session_token, expires_at, user_agent, ip_address) VALUES ($1, $2, $3, $4, $5) RETURNING *',
         [userId, sessionToken, expiresAt, userAgent, ipAddress]
     );
     
-    return sessionToken;
+    return result.rows[0];
 };
 
 // Verify user session
 const verifyUserSession = async (sessionToken) => {
     try {
-        // Verify JWT structure
+        // Verify JWT structure and get payload
         const decoded = verifyJWT(sessionToken);
         
+        if (!decoded.userId || decoded.type !== 'session') {
+            throw new Error('Invalid session token format');
+        }
+        
         // Check if session exists in database and is not expired
+        // Look up by the actual token since we store the full JWT
         const result = await query(
-            'SELECT us.*, u.email, u.name, u.is_active FROM user_sessions us JOIN users u ON us.user_id = u.id WHERE us.session_token = $1 AND us.expires_at > NOW()',
-            [sessionToken]
+            'SELECT us.*, u.email, u.name, u.is_active FROM user_sessions us JOIN users u ON us.user_id = u.id WHERE us.session_token = $1 AND us.expires_at > NOW() AND us.user_id = $2',
+            [sessionToken, decoded.userId]
         );
         
         if (result.rows.length === 0) {

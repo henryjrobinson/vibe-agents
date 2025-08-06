@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CORS Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-result {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            border: 1px solid #e9ecef;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 CORS & Backend Connection Test</h1>
+        <p>This page tests the connection between the frontend (localhost:8080) and backend (localhost:3000).</p>
+        
+        <div id="results"></div>
+        
+        <button onclick="testBackendHealth()">Test Backend Health</button>
+        <button onclick="testMagicLinkRequest()">Test Magic Link Request</button>
+        <button onclick="testCORS()">Test CORS Preflight</button>
+        <button onclick="clearResults()">Clear Results</button>
+        
+        <h3>Server Status:</h3>
+        <div id="server-status">Click a test button to check server status...</div>
+    </div>
+
+    <script>
+        function addResult(message, type = 'info') {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = message;
+            results.appendChild(div);
+            results.scrollTop = results.scrollHeight;
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('server-status').innerHTML = 'Click a test button to check server status...';
+        }
+
+        async function testBackendHealth() {
+            addResult('🔍 Testing backend health endpoint...', 'info');
+            
+            try {
+                const response = await fetch('http://localhost:3000/health');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult('✅ Backend Health Check: SUCCESS', 'success');
+                    addResult(`<pre>${JSON.stringify(data, null, 2)}</pre>`, 'info');
+                    updateServerStatus('✅ Backend server is healthy');
+                } else {
+                    addResult(`❌ Backend Health Check: FAILED (${response.status})`, 'error');
+                    updateServerStatus('❌ Backend server is not responding correctly');
+                }
+            } catch (error) {
+                addResult(`❌ Backend Health Check: ERROR - ${error.message}`, 'error');
+                updateServerStatus('❌ Cannot connect to backend server');
+            }
+        }
+
+        async function testMagicLinkRequest() {
+            addResult('📧 Testing magic link request...', 'info');
+            
+            try {
+                const response = await fetch('http://localhost:3000/api/auth/request-magic-link', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: 'test@example.com'
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult('✅ Magic Link Request: SUCCESS', 'success');
+                    addResult(`<pre>${JSON.stringify(data, null, 2)}</pre>`, 'info');
+                    updateServerStatus('✅ Authentication API is working');
+                } else {
+                    const errorData = await response.json();
+                    addResult(`❌ Magic Link Request: FAILED (${response.status})`, 'error');
+                    addResult(`<pre>${JSON.stringify(errorData, null, 2)}</pre>`, 'error');
+                    updateServerStatus('❌ Authentication API has issues');
+                }
+            } catch (error) {
+                addResult(`❌ Magic Link Request: CORS/Network ERROR - ${error.message}`, 'error');
+                updateServerStatus('❌ CORS or network issue preventing API calls');
+            }
+        }
+
+        async function testCORS() {
+            addResult('🌐 Testing CORS preflight request...', 'info');
+            
+            try {
+                // This will trigger a preflight request
+                const response = await fetch('http://localhost:3000/api/auth/request-magic-link', {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Origin': 'http://localhost:8080',
+                        'Access-Control-Request-Method': 'POST',
+                        'Access-Control-Request-Headers': 'Content-Type'
+                    }
+                });
+                
+                if (response.ok) {
+                    addResult('✅ CORS Preflight: SUCCESS', 'success');
+                    addResult('CORS is properly configured for localhost:8080', 'success');
+                    updateServerStatus('✅ CORS is working correctly');
+                } else {
+                    addResult(`❌ CORS Preflight: FAILED (${response.status})`, 'error');
+                    updateServerStatus('❌ CORS configuration issue');
+                }
+            } catch (error) {
+                addResult(`❌ CORS Preflight: ERROR - ${error.message}`, 'error');
+                updateServerStatus('❌ CORS is blocking requests');
+            }
+        }
+
+        function updateServerStatus(status) {
+            document.getElementById('server-status').innerHTML = status;
+        }
+
+        // Auto-test on page load
+        window.addEventListener('load', function() {
+            addResult('🚀 Starting automatic tests...', 'info');
+            setTimeout(testBackendHealth, 500);
+            setTimeout(testMagicLinkRequest, 1500);
+            setTimeout(testCORS, 2500);
+        });
+    </script>
+</body>
+</html>

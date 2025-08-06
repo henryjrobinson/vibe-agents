@@ -129,7 +129,8 @@ router.post('/verify-magic-link',
             const user = userResult.rows[0];
 
             // Create user session
-            const sessionToken = await createUserSession(user.id, userAgent, clientIP);
+            const session = await createUserSession(user.id, userAgent, clientIP);
+            const sessionToken = session.session_token;
 
             // Update user's last login
             await query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
