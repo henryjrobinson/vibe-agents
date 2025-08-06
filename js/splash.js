@@ -115,10 +115,24 @@ class SplashAuth {
             document.body.classList.add('has-video');
             console.log('🎥 Background video detected and enabled');
             
-            // Handle video loading errors gracefully
+            // Ensure video properties are set
+            video.muted = true;
+            video.loop = true;
+            video.playsInline = true;
+            
+            // Handle video events
+            video.addEventListener('loadeddata', () => {
+                console.log('✅ Background video loaded successfully');
+            });
+            
             video.addEventListener('error', () => {
                 console.warn('⚠️ Background video failed to load, using gradient fallback');
                 document.body.classList.remove('has-video');
+            });
+            
+            // Attempt to play
+            video.play().catch(error => {
+                console.log('Video autoplay prevented by browser (normal):', error.message);
             });
         } else {
             console.log('🎨 No background video, using gradient background');
