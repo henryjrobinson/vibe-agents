@@ -190,7 +190,7 @@ class SplashAuth {
             }
             
             // Call the backend API to verify the token
-            const response = await fetch('http://localhost:3000/api/auth/verify-magic-link', {
+            const response = await fetch(window.API.endpoints.verifyMagicLink, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
