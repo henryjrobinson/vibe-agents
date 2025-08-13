@@ -435,11 +435,11 @@ async function sendMessage() {
     showTypingIndicator();
     
     try {
-        // Process Memory Keeper and Collaborator in parallel for faster response
-        await Promise.all([
-            processWithMemoryKeeper(message),
-            processWithCollaborator(message)
-        ]);
+        // Process with Memory Keeper first
+        await processWithMemoryKeeper(message);
+        
+        // Then get Collaborator response
+        await processWithCollaborator(message);
         
     } catch (error) {
         console.error('Error processing message:', error);
