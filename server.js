@@ -111,7 +111,7 @@ PRIVACY PROTOCOLS:
 - Note generational health patterns for medical family history
 - Distinguish between confirmed facts and uncertain memories
 
-ACCUEXTRACTION GUIDELINES:
+EXTRACTION GUIDELINES:
 - Extract ALL people mentioned, even in passing or as context
 - INFER relationships from conversational clues and family context
 - Build comprehensive family trees from fragments of information
@@ -139,23 +139,14 @@ Extract:
 
 REMEMBER: Be thorough and inferential. Extract every person mentioned and build complete relationship webs from conversational fragments.
 
-JSON OUTPUT STRUCTURE:
+JSON OUTPUT STRUCTURE - You MUST respond with ONLY valid JSON, no other text:
 {
   "people": ["name with relationship and key details"],
   "dates": ["specific years, decades, or time periods mentioned"],
   "places": ["specific locations with context"],
   "relationships": ["nature of connections between people"],
-  "events": ["significant life events with context"],
-  "health_information": ["medical conditions, mental health, occupational hazards - flagged for privacy"],
-  "uncertainties": ["details that need clarification"],
-  "family_patterns": ["recurring themes across generations"]
+  "events": ["significant life events with context"]
 }
-
-PATTERN RECOGNITION:
-- Identify family health patterns across generations
-- Note social networks and community connections
-- Track geographical movements and their contexts
-- Recognize historical events and their personal impacts
 
 QUALITY STANDARDS:
 - Preserve exact names, nicknames, and titles as spoken
@@ -214,9 +205,34 @@ app.post('/api/memory-keeper', async (req, res) => {
     try {
         const { message, model = 'claude-3-5-sonnet-20241022' } = req.body;
 
+        console.log('=== MEMORY KEEPER DEBUG ===');
+        console.log('Input message:', message);
+        console.log('Model:', model);
+        console.log('API Key configured:', !!process.env.ANTHROPIC_API_KEY);
+
         if (!message || typeof message !== 'string') {
             return res.status(400).json({ error: 'Message is required and must be a string' });
         }
+
+        const promptContent = `Extract information from: "${message}"
+
+You MUST respond with ONLY valid JSON in this exact format:
+{
+  "people": [],
+  "dates": [],
+  "places": [],
+  "relationships": [],
+  "events": []
+}
+
+Rules:
+- If someone mentions their name, add to people array: {"name": "Name", "relationship": "narrator", "details": "person telling story"}
+- If someone mentions a place, add to places array: {"location": "Place", "significance": "context", "details": "description"}
+- NO explanatory text, NO markdown, ONLY the JSON object
+
+Message: "${message}"`;
+        console.log('Prompt sent to Claude:', promptContent);
+        console.log('System prompt length:', MEMORY_KEEPER_SYSTEM_PROMPT.length);
 
         const response = await anthropic.messages.create({
             model: model,
@@ -224,16 +240,21 @@ app.post('/api/memory-keeper', async (req, res) => {
             system: MEMORY_KEEPER_SYSTEM_PROMPT,
             messages: [{
                 role: 'user',
-                content: `Extract structured memories from this message: "${message}"`
+                content: promptContent
             }]
         });
+
+        console.log('Claude raw response:', response.content[0].text);
+        console.log('Response length:', response.content[0].text.length);
 
         let extractedMemories;
         try {
             // Parse the JSON response from Claude
             extractedMemories = JSON.parse(response.content[0].text);
+            console.log('Successfully parsed memories:', JSON.stringify(extractedMemories, null, 2));
         } catch (parseError) {
             console.error('JSON Parse Error:', parseError);
+            console.error('Raw response that failed to parse:', response.content[0].text);
             // Fallback to empty structure if parsing fails
             extractedMemories = {
                 people: [],
@@ -242,6 +263,7 @@ app.post('/api/memory-keeper', async (req, res) => {
                 relationships: [],
                 events: []
             };
+            console.log('Using fallback empty structure');
         }
 
         res.json({

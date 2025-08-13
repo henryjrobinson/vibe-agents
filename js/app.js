@@ -67,7 +67,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     initializeModelSelector();
     initializeDebugPanel();
     await loadSecureSession(); // Load encrypted session data
-    showWelcomeModal();
+    
+    // Auto-trigger initial conversation for new users
+    autoStartConversation();
 });
 
 /**
@@ -407,33 +409,7 @@ function updateDebugPanel(input, response, parsed) {
     console.log('Debug info:', { input, response, parsed });
 }
 
-/**
- * Show welcome modal
- */
-function showWelcomeModal() {
-    const modal = document.getElementById('welcome-modal');
-    if (modal) {
-        modal.style.display = 'flex';
-    }
-}
 
-/**
- * Start story session - hide modal and begin conversation
- */
-function startStorySession() {
-    const modal = document.getElementById('welcome-modal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-    
-    // Add initial collaborator message
-    setTimeout(() => {
-        addMessage('ai', 'collaborator', 
-            "Hello! I'm so glad you're here to share your stories with me. I'm your Collaborator, and I'll be asking thoughtful questions to help you share your memories. The Memory Keeper will be organizing everything we discuss.\n\nLet's start with something simple - could you tell me your name and where you grew up?",
-            { timestamp: new Date().toLocaleTimeString() }
-        );
-    }, 500);
-}
 
 /**
  * Send user message
@@ -986,6 +962,42 @@ function startNewSession() {
     
     // Show welcome modal again
     showWelcomeModal();
+}
+
+/**
+ * Auto-start conversation for new users coming from splash page
+ */
+function autoStartConversation() {
+    // Check if user just came from splash page or is a new user
+    const isNewUser = !localStorage.getItem('story_session_exists');
+    const hasNoMessages = currentSession.messages.length === 0;
+    const justStarted = localStorage.getItem('story-collection-used') === 'true';
+    
+    // Auto-start conversation for new users or those coming from splash
+    if ((isNewUser || hasNoMessages) && justStarted) {
+        console.log('🎬 New user detected, starting conversation automatically...');
+        
+        // Small delay for better UX, then start conversation
+        setTimeout(() => {
+            startInitialConversation();
+        }, 1000);
+    }
+}
+
+/**
+ * Start the initial conversation with the Collaborator
+ */
+function startInitialConversation() {
+    // Add initial collaborator message
+    addMessage('assistant', 'Collaborator', 
+        "Hello! I'm so glad you're here to share your stories with me. I'm your Collaborator, and I'll be asking thoughtful questions to help you share your memories. The Memory Keeper will be organizing everything we discuss.\n\nLet's start with something simple - could you tell me your name and where you grew up?",
+        { timestamp: new Date().toLocaleTimeString() }
+    );
+    
+    // Mark that we've started the session
+    localStorage.setItem('story_session_exists', 'true');
+    
+    console.log('✅ Initial conversation started successfully');
 }
 
 /**

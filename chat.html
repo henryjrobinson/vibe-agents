@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Story Collection - AI Agents for Capturing Life Stories">
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+    <title>Story Collection - AI Agents for Capturing Life Stories</title>
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://story-collection.netlify.app/">
+    <meta property="og:title" content="Story Collection - AI Agents for Capturing Life Stories">
+    <meta property="og:description" content="Share your life stories with AI - Collaborator and Memory Keeper agents help capture and organize your memories">
+    <meta property="og:site_name" content="Story Collection">
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://story-collection.netlify.app/">
+    <meta property="twitter:title" content="Story Collection - AI Agents for Capturing Life Stories">
+    <meta property="twitter:description" content="Share your life stories with AI - Collaborator and Memory Keeper agents help capture and organize your memories">
+    
+    <link rel="stylesheet" href="css/styles.css">
+    
+    <!-- Crypto utilities for secure data storage -->
+    <script src="js/crypto-utils.js"></script>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <div class="header-title">Story Collection</div>
+            <div class="header-subtitle">Sharing your life stories with AI</div>
+            <div class="header-actions">
+                <div class="model-selector">
+                    <label for="modelSelect">Claude Model:</label>
+                    <select id="modelSelect" class="model-dropdown">
+                        <option value="claude-opus-4-20250514" selected>Claude Opus 4 (Most Capable)</option>
+                        <option value="claude-sonnet-4-20250514">Claude Sonnet 4 (High Performance)</option>
+                        <option value="claude-3-7-sonnet-20250219">Claude 3.7 Sonnet (Extended Thinking)</option>
+                        <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet (Intelligent)</option>
+                        <option value="claude-3-5-haiku-20241022">Claude 3.5 Haiku (Fastest)</option>
+                        <option value="claude-3-haiku-20240307">Claude 3 Haiku (Quick & Compact)</option>
+                    </select>
+                </div>
+                <div class="controls">
+                    <div class="toggle-group">
+                        <!-- Memory Keeper toggle hidden for cleaner UI -->
+                        <!-- <label class="toggle-label">
+                            <input type="checkbox" id="memory-display-toggle" checked>
+                            <span class="toggle-slider"></span>
+                            Memory Keeper
+                        </label> -->
+                        <label class="toggle-label">
+                            <input type="checkbox" id="logging-mode-toggle">
+                            <span class="toggle-slider"></span>
+                            Logging Mode
+                        </label>
+                    </div>
+                    <button class="action-btn" id="new-story-btn">New Story</button>
+                    <button class="action-btn" id="export-btn">Export</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="chat-section">
+                <div class="chat-messages" id="chat-messages">
+                    <!-- Messages will be added here -->
+                </div>
+                
+                <div class="chat-input-area">
+                    <div class="typing-indicator hidden" id="typing-indicator">
+                        <span>Collaborator is thinking</span>
+                        <div class="typing-dots">
+                            <div class="typing-dot"></div>
+                            <div class="typing-dot"></div>
+                            <div class="typing-dot"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="input-container">
+                        <input type="text" class="chat-input" placeholder="Share your story..." id="chat-input">
+                        <button class="send-btn" id="send-btn">Send</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="memory-panel" id="memory-panel">
+                <div class="memory-header">
+                    <h3>Extracted Memories</h3>
+                    <div class="memory-status" id="memory-status">Ready</div>
+                </div>
+                
+                <div class="memory-content">
+                    <div class="memory-section">
+                        <h4>People</h4>
+                        <div class="memory-items" id="memory-people">
+                            <div class="memory-placeholder">No people mentioned yet</div>
+                        </div>
+                    </div>
+                    <div class="memory-section">
+                        <h4>Dates & Times</h4>
+                        <div class="memory-items" id="memory-dates">
+                            <div class="memory-placeholder">No dates mentioned yet</div>
+                        </div>
+                    </div>
+                    <div class="memory-section">
+                        <h4>Places</h4>
+                        <div class="memory-items" id="memory-places">
+                            <div class="memory-placeholder">No places mentioned yet</div>
+                        </div>
+                    </div>
+                    <div class="memory-section">
+                        <h4>Relationships</h4>
+                        <div class="memory-items" id="memory-relationships">
+                            <div class="memory-placeholder">No relationships mentioned yet</div>
+                        </div>
+                    </div>
+                    <div class="memory-section">
+                        <h4>Events</h4>
+                        <div class="memory-items" id="memory-events">
+                            <div class="memory-placeholder">No events mentioned yet</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="tap-hint hidden" id="tap-hint">Click anywhere to continue the conversation</div>
+
+    <!-- Logging Panel -->
+    <div class="logging-panel hidden" id="logging-panel">
+        <div class="logging-header">
+            <h3>Agent Data Flow Log</h3>
+            <div class="logging-controls">
+                <button id="clear-log-btn" class="log-btn">Clear Log</button>
+                <button id="export-log-btn" class="log-btn">Export Log</button>
+            </div>
+        </div>
+        <div class="logging-content">
+            <div class="log-column">
+                <h4>Input & Requests</h4>
+                <div class="log-entries" id="log-inputs"></div>
+            </div>
+            <div class="log-column">
+                <h4>Responses & Processing</h4>
+                <div class="log-entries" id="log-outputs"></div>
+            </div>
+        </div>
+    </div>
+
+
+
+    <script src="js/app.js"></script>
+</body>
+</html>
