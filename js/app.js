@@ -16,7 +16,7 @@ let sessionAutoSaveEnabled = true;
 let isTyping = false;
 let memoryDisplayVisible = true;
 let loggingModeEnabled = false;
-let selectedModel = 'claude-3-5-sonnet-20241022'; // Default model - Claude 3.5 Sonnet (Reliable & Fast)
+let selectedModel = 'claude-opus-4-20250514'; // Default model - Claude 4 Opus (Most Capable)
 let logEntries = [];
 
 /**
