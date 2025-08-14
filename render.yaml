@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: vibe-agents
+    env: node
+    plan: starter
+    region: oregon
+    buildCommand: "npm install"
+    startCommand: "npm start"
+    healthCheckPath: "/healthz"
+    autoDeploy: true
+    runtime:
+      nodeVersion: "18"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: COLLABORATOR_MODEL
+        value: claude-3-5-haiku-latest
+      - key: MEMORY_MODEL
+        value: claude-3-5-haiku-latest
+      - key: RATE_LIMIT_WINDOW_MS
+        value: "900000"
+      - key: RATE_LIMIT_MAX_REQUESTS
+        value: "100"
+      - key: LOG_LEVEL
+        value: info
+      - key: ENABLE_ANALYTICS
+        value: "false"
+      - key: ANTHROPIC_API_KEY
+        sync: false # set in Render Dashboard
+      - key: SESSION_SECRET
+        sync: false # set in Render Dashboard
+      - key: CORS_ORIGIN
+        sync: false # optional; set if you need specific origins
