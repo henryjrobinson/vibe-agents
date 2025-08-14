@@ -209,7 +209,7 @@ app.post('/chat', async (req, res) => {
             const memoryPrompt = `Extract structured memories from the following message. Respond with ONLY valid JSON matching keys: people, dates, places, relationships, events.\n\nMessage: ${JSON.stringify(text)}`;
             const memResp = await anthropic.messages.create({
                 model: MEMORY_MODEL,
-                max_tokens: 600,
+                max_tokens: 300,
                 system: MEMORY_KEEPER_SYSTEM_PROMPT,
                 messages: [{ role: 'user', content: memoryPrompt }]
             });
@@ -231,7 +231,7 @@ app.post('/chat', async (req, res) => {
     try {
         const collabResp = await anthropic.messages.create({
             model: COLLABORATOR_MODEL,
-            max_tokens: 700,
+            max_tokens: 500,
             system: COLLABORATOR_SYSTEM_PROMPT,
             messages: [
                 { role: 'user', content: text }
@@ -281,7 +281,7 @@ app.get('/healthz', (req, res) => {
 // Collaborator agent endpoint
 app.post('/api/collaborator', async (req, res) => {
     try {
-        const { message, conversationHistory = [], model = 'claude-3-5-sonnet-20241022' } = req.body;
+        const { message, conversationHistory = [], model = (process.env.COLLABORATOR_MODEL || 'claude-3-5-haiku-latest') } = req.body;
 
         if (!message || typeof message !== 'string') {
             return res.status(400).json({ error: 'Message is required and must be a string' });
@@ -323,7 +323,7 @@ app.post('/api/collaborator', async (req, res) => {
 // Memory Keeper agent endpoint
 app.post('/api/memory-keeper', async (req, res) => {
     try {
-        const { message, model = 'claude-3-5-sonnet-20241022' } = req.body;
+        const { message, model = (process.env.MEMORY_MODEL || 'claude-3-5-haiku-latest') } = req.body;
 
         console.log('=== MEMORY KEEPER DEBUG ===');
         console.log('Input message:', message);
@@ -356,7 +356,7 @@ Message: "${message}"`;
 
         const response = await anthropic.messages.create({
             model: model,
-            max_tokens: 500,
+            max_tokens: 300,
             system: MEMORY_KEEPER_SYSTEM_PROMPT,
             messages: [{
                 role: 'user',
