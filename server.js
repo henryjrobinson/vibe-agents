@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
+const { EventEmitter } = require('events');
 require('dotenv').config();
 
 const app = express();
@@ -29,10 +30,22 @@ app.use(helmet({
     }
 }));
 
+// CORS: use env override, else allow localhost and *.netlify.app (demo)
+const corsOriginsEnv = process.env.CORS_ORIGIN;
+const corsAllow = corsOriginsEnv
+  ? corsOriginsEnv.split(',').map(s => s.trim()).filter(Boolean)
+  : [/^https?:\/\/localhost(?::\d+)?$/, /^https?:\/\/127\.0\.0\.1(?::\d+)?$/, /\.netlify\.app$/];
+
 app.use(cors({
-    origin: process.env.NODE_ENV === 'production' 
-        ? ['https://story-collection.netlify.app', 'https://vibe-agents.netlify.app']
-        : ['http://localhost:3000', 'http://localhost:8000', 'http://127.0.0.1:8000']
+    origin: (origin, callback) => {
+        if (!origin) return callback(null, true); // allow same-origin/non-browser
+        const allowed = corsAllow.some(rule => {
+            if (rule instanceof RegExp) return rule.test(origin);
+            return rule === origin;
+        });
+        return allowed ? callback(null, true) : callback(new Error('CORS not allowed'), false);
+    },
+    credentials: true
 }));
 
 // Rate limiting
@@ -49,6 +62,22 @@ app.use(express.urlencoded({ extended: true }));
 
 // Serve static files
 app.use(express.static('.'));
+
+// In-memory pub/sub for SSE events (demo only)
+// Map<conversationId, EventEmitter>
+const channels = new Map();
+function getChannel(conversationId) {
+    if (!channels.has(conversationId)) {
+        channels.set(conversationId, new EventEmitter());
+    }
+    return channels.get(conversationId);
+}
+
+// Helper to write SSE event
+function sseWrite(res, event, data) {
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+}
 
 // System prompts for agents
 const COLLABORATOR_SYSTEM_PROMPT = `You are a gentle, empathetic Collaborator helping elderly people preserve their life stories and family memories. You embody the warmth and patience of a caring family member or trusted friend who genuinely wants to help preserve precious memories.
@@ -157,6 +186,97 @@ QUALITY STANDARDS:
 Remember: You're preserving family legacy with the same care and attention the family would want for their most precious memories.`;
 
 // API Routes
+
+// === SSE: Stream collaborator + background memory extraction ===
+app.post('/chat', async (req, res) => {
+    // Headers for SSE
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+
+    const { text, conversationId = 'default', messageId = Date.now().toString() } = req.body || {};
+    const COLLABORATOR_MODEL = process.env.COLLABORATOR_MODEL || 'claude-3-5-haiku-latest';
+    const MEMORY_MODEL = process.env.MEMORY_MODEL || COLLABORATOR_MODEL;
+
+    if (!text || typeof text !== 'string') {
+        sseWrite(res, 'error', { code: 'bad_request', message: 'text is required' });
+        return res.end();
+    }
+
+    // Start background memory extraction (non-blocking)
+    (async () => {
+        try {
+            const memoryPrompt = `Extract structured memories from the following message. Respond with ONLY valid JSON matching keys: people, dates, places, relationships, events.\n\nMessage: ${JSON.stringify(text)}`;
+            const memResp = await anthropic.messages.create({
+                model: MEMORY_MODEL,
+                max_tokens: 600,
+                system: MEMORY_KEEPER_SYSTEM_PROMPT,
+                messages: [{ role: 'user', content: memoryPrompt }]
+            });
+            let payload;
+            try {
+                payload = JSON.parse(memResp.content?.[0]?.text || '{}');
+            } catch (e) {
+                payload = { people: [], dates: [], places: [], relationships: [], events: [] };
+            }
+            const chan = getChannel(conversationId);
+            chan.emit('memory', { messageId, ...payload });
+        } catch (err) {
+            const chan = getChannel(conversationId);
+            chan.emit('memory', { messageId, error: 'memory_extraction_failed' });
+        }
+    })();
+
+    // Stream collaborator response
+    try {
+        const collabResp = await anthropic.messages.create({
+            model: COLLABORATOR_MODEL,
+            max_tokens: 700,
+            system: COLLABORATOR_SYSTEM_PROMPT,
+            messages: [
+                { role: 'user', content: text }
+            ]
+        });
+
+        const fullText = collabResp.content?.[0]?.text || '';
+        // Tokenize rudimentarily for demo streaming if SDK streaming isn't used
+        const parts = fullText.split(/(\s+)/);
+        for (const p of parts) {
+            sseWrite(res, 'token', { text: p });
+        }
+        sseWrite(res, 'done', { messageId });
+        res.end();
+    } catch (error) {
+        sseWrite(res, 'error', { code: 'upstream_error', message: process.env.NODE_ENV === 'development' ? error.message : 'failed' });
+        res.end();
+    }
+});
+
+// SSE channel for memory updates
+app.get('/events', (req, res) => {
+    const { conversationId = 'default' } = req.query;
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+
+    const chan = getChannel(conversationId);
+    const onMemory = (data) => sseWrite(res, 'memory', data);
+    chan.on('memory', onMemory);
+
+    // Heartbeat to keep connection alive
+    const hb = setInterval(() => res.write(': heartbeat\n\n'), 15000);
+
+    req.on('close', () => {
+        clearInterval(hb);
+        chan.off('memory', onMemory);
+        res.end();
+    });
+});
+
+// Lightweight healthcheck for Render
+app.get('/healthz', (req, res) => {
+    res.status(200).json({ ok: true, ts: Date.now() });
+});
 
 // Collaborator agent endpoint
 app.post('/api/collaborator', async (req, res) => {
