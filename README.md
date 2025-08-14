@@ -25,8 +25,24 @@ A web application that helps elderly users share their life stories through conv
 
 - **Frontend**: Vanilla JavaScript, Custom CSS with CSS Custom Properties
 - **AI Backend**: Anthropic Claude 3.5 Sonnet
-- **Deployment**: Netlify (static hosting)
-- **Architecture**: Event-driven, client-side application
+- **Deployment**: Render (always-on Node service for backend) + static hosting for frontend
+- **Architecture**: Server-backed with SSE streaming (Collaborator) and background tool processing (Memory Keeper)
+
+## Current Architecture (Demo/Prototype)
+
+This repo now targets a demo-friendly architecture:
+
+- **Single agent (Collaborator)** streams responses to the UI via **SSE**.
+- **Memory Keeper** runs as a **tool-like background job** that extracts structured data and publishes updates via SSE.
+- **Backend** runs on **Render** for predictable latency (no cold starts).
+
+See detailed docs in `docs/`:
+
+- `docs/prd.md`
+- `docs/architecture/overview.md`
+- `docs/api.md`
+- `docs/agents.md`
+- `docs/project-plan.md`
 
 ## Quick Start
 
@@ -98,7 +114,7 @@ nvm install      # Install if version not available
 - No interference with other projects
 - Clean environment setup/teardown
 
-### Netlify Deployment
+### Legacy: Netlify Deployment
 
 1. **Connect repository to Netlify**
    - Fork/clone this repository
