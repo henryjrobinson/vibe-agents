@@ -46,6 +46,24 @@ class SplashPage {
         // Set up event listeners
         this.setupEventListeners();
         
+        // If already authenticated, go straight to app
+        const redirectIfAuthed = () => {
+            try {
+                if (window.firebaseAuth && window.firebaseAuth.isAuthenticated()) {
+                    this.continueToApp();
+                }
+            } catch (_) {}
+        };
+        if (window.firebaseAuth) {
+            redirectIfAuthed();
+            // Also watch for auth becoming available/logged in
+            window.firebaseAuth.onAuthStateChanged((user) => {
+                if (user) this.continueToApp();
+            });
+        } else {
+            window.addEventListener('firebase-ready', redirectIfAuthed, { once: true });
+        }
+        
         // Set up background video
         this.setupBackgroundVideo();
         
@@ -187,7 +205,7 @@ class SplashPage {
         this.currentAuthMode = mode;
     }
 
-    handleAuthSubmit() {
+    async handleAuthSubmit() {
         console.log('🔐 Auth submit clicked');
         
         const email = document.getElementById('email')?.value;
@@ -216,11 +234,31 @@ class SplashPage {
         // Mark that user has started using the app
         localStorage.setItem('story-collection-used', 'true');
         
-        // Simulate auth process (replace with real Firebase auth later)
-        setTimeout(() => {
+        // Real Firebase authentication via window.firebaseAuth
+        try {
+            if (!window.firebaseAuth) {
+                this.showAuthError('Authentication is not ready. Please wait a moment and try again.');
+                return;
+            }
+            const result = isSignUp
+                ? await window.firebaseAuth.signUp(email, password)
+                : await window.firebaseAuth.signIn(email, password);
+            
+            if (!result?.success) {
+                this.showAuthError(result?.error || 'Authentication failed. Please try again.');
+                return;
+            }
             console.log(`✅ ${isSignUp ? 'Account created' : 'Signed in'} successfully!`);
             this.continueToApp();
-        }, 1500);
+        } catch (error) {
+            console.error('❌ Auth error:', error);
+            this.showAuthError('Authentication failed. Please try again.');
+        } finally {
+            if (authSubmitBtn) {
+                authSubmitBtn.classList.remove('loading');
+                authSubmitBtn.textContent = isSignUp ? 'Create Account' : 'Sign In';
+            }
+        }
     }
     
     handleNavigation(href) {

@@ -190,11 +190,20 @@ class AppHeader {
         console.log('👋 Logout clicked');
         
         if (confirm('Are you sure you want to sign out?')) {
-            // Clear any stored auth data
+            // Clear any stored usage marker
             localStorage.removeItem('story-collection-used');
             
-            // Redirect to landing page
-            window.location.href = 'index.html';
+            // Sign out from Firebase if available, then redirect
+            const redirect = () => { try { window.location.replace('index.html'); } catch (_) { window.location.href = 'index.html'; } };
+            try {
+                if (window.firebaseAuth && typeof window.firebaseAuth.signOut === 'function') {
+                    window.firebaseAuth.signOut().finally(redirect);
+                } else {
+                    redirect();
+                }
+            } catch (_) {
+                redirect();
+            }
         }
     }
 

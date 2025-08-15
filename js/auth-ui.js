@@ -16,6 +16,10 @@ class AuthUI {
     }
 
     createAuthModal() {
+        // Prevent duplicate modal injection if already present
+        if (document.getElementById('auth-modal')) {
+            return;
+        }
         // Create modal HTML
         const modalHTML = `
             <div id="auth-modal" class="auth-modal hidden">
@@ -142,6 +146,9 @@ class AuthUI {
         const modal = document.getElementById('auth-modal');
         modal.classList.remove('hidden');
         modal.classList.add('flex-visible');
+        // Hide underlying auth-required prompt (if present) while modal is open
+        const authRequired = document.getElementById('auth-required');
+        if (authRequired) authRequired.classList.add('hidden');
         document.body.style.overflow = 'hidden';
     }
 
@@ -150,6 +157,15 @@ class AuthUI {
         modal.classList.add('hidden');
         modal.classList.remove('flex-visible');
         document.body.style.overflow = 'auto';
+        // If user is still unauthenticated, re-show the auth-required prompt
+        try {
+            if (window.firebaseAuth && !window.firebaseAuth.isAuthenticated()) {
+                const authRequired = document.getElementById('auth-required');
+                if (authRequired) authRequired.classList.remove('hidden');
+            }
+        } catch (_) {
+            // No-op: if firebaseAuth not ready, don't throw
+        }
         this.clearMessages();
     }
 
@@ -520,5 +536,9 @@ class AuthUI {
 
 // Initialize auth UI when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
+    // Only initialize once and only on pages that opt-in to auth UI
+    if (window.authUI) return;
+    const shouldInit = !!document.getElementById('auth-required') || !!document.querySelector('[data-auth-ui="true"]');
+    if (!shouldInit) return;
     window.authUI = new AuthUI();
 });

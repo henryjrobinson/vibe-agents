@@ -141,9 +141,11 @@ window.firebaseAuth = {
     onAuthStateChanged(callback) {
         authStateCallbacks.push(callback);
         
-        // Call immediately with current state
-        if (currentUser !== null) {
+        // Call immediately with current state (including null) so pages can react on initial load
+        try {
             callback(currentUser);
+        } catch (e) {
+            console.error('Auth state callback immediate invoke error:', e);
         }
         
         // Return unsubscribe function

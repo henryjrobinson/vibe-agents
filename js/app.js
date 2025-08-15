@@ -25,18 +25,16 @@ function setupAuthSSEBinding() {
                 updateMemoryStatus('Connecting...');
                 await initializeSSE();
             } else {
-                updateMemoryStatus('Sign in to enable memory updates');
+                updateMemoryStatus('Redirecting to sign in...');
+                // Enforce splash-only authentication: redirect if unauthenticated on chat page
+                setTimeout(() => {
+                    try { window.location.replace('index.html'); } catch (_) { window.location.href = 'index.html'; }
+                }, 0);
             }
         });
 
-        // Handle current state immediately
-        if (window.firebaseAuth.isAuthenticated()) {
-            // Show user we're connecting right away
-            updateMemoryStatus('Connecting...');
-            initializeSSE();
-        } else {
-            updateMemoryStatus('Sign in to enable memory updates');
-        }
+        // Initial load: wait for Firebase to report auth state to avoid race-condition redirects
+        updateMemoryStatus('Checking sign-in...');
     };
 
     if (window.firebaseAuth) {
