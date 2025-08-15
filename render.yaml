@@ -8,8 +8,6 @@ services:
     startCommand: "npm start"
     healthCheckPath: "/healthz"
     autoDeploy: true
-    runtime:
-      nodeVersion: "18"
     envVars:
       - key: NODE_ENV
         value: production
