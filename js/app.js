@@ -19,6 +19,19 @@ let loggingModeEnabled = false;
 let selectedModel = 'claude-3-5-haiku-latest'; // Default model - Fast and reliable
 let logEntries = [];
 
+// Small helper to enforce client-side timeouts for fetch
+async function fetchWithTimeout(resource, options = {}) {
+    const { timeout = 20000, ...rest } = options;
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    try {
+        const response = await fetch(resource, { ...rest, signal: controller.signal });
+        return response;
+    } finally {
+        clearTimeout(id);
+    }
+}
+
 /**
  * Sanitize error messages for user-friendly display to seniors
  */
@@ -435,11 +448,12 @@ async function sendMessage() {
     showTypingIndicator();
     
     try {
-        // Process with Memory Keeper first
-        await processWithMemoryKeeper(message);
-        
-        // Then get Collaborator response
-        await processWithCollaborator(message);
+        // Process both agents in parallel to cut latency
+        const tasks = [
+            processWithMemoryKeeper(message),
+            processWithCollaborator(message)
+        ];
+        await Promise.allSettled(tasks);
         
     } catch (error) {
         console.error('Error processing message:', error);
@@ -483,12 +497,13 @@ async function processWithMemoryKeeper(message) {
         
         console.log('Sending request to Memory Keeper API:', requestBody);
         
-        const response = await fetch(window.API_CONFIG.MEMORY_KEEPER, {
+        const response = await fetchWithTimeout(window.API_CONFIG.MEMORY_KEEPER, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify(requestBody),
+            timeout: 20000
         });
         
         if (!response.ok) {
@@ -545,7 +560,7 @@ async function processWithCollaborator(message) {
         // Build conversation history for context
         const conversationHistory = currentSession.messages
             .filter(msg => msg.type === 'user' || (msg.type === 'ai' && msg.agent === 'collaborator'))
-            .slice(-6) // Last 6 messages for context
+            .slice(-4) // Last 4 messages for context
             .map(msg => ({
                 role: msg.type === 'user' ? 'user' : 'assistant',
                 content: msg.content
@@ -566,12 +581,13 @@ async function processWithCollaborator(message) {
             timestamp: new Date().toISOString()
         }, true);
         
-        const response = await fetch(window.API_CONFIG.COLLABORATOR, {
+        const response = await fetchWithTimeout(window.API_CONFIG.COLLABORATOR, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify(requestBody),
+            timeout: 20000
         });
         
         if (!response.ok) {
@@ -703,11 +719,13 @@ function updateMemoryDisplay(extractedMemories) {
     // Use requestAnimationFrame for smooth DOM updates
     requestAnimationFrame(() => {
         // Batch all DOM updates using documentFragment for better performance
-        const categories = ['people', 'dates', 'places', 'relationships', 'events'];
+        const categories = Object.keys(extractedMemories);
         
         categories.forEach(category => {
-            if (extractedMemories[category] && extractedMemories[category].length > 0) {
-                batchAddMemoryItems(category, extractedMemories[category]);
+            const items = extractedMemories[category];
+            if (Array.isArray(items) && items.length > 0) {
+                ensureMemorySection(category);
+                batchAddMemoryItems(category, items);
             }
         });
     });
@@ -762,6 +780,58 @@ function batchAddMemoryItems(category, items) {
 }
 
 /**
+ * Ensure a memory section exists for a given category; create dynamically if missing
+ */
+function ensureMemorySection(category) {
+    const containerId = `memory-${category}`;
+    if (document.getElementById(containerId)) return;
+    const memoryContent = document.querySelector('.memory-content');
+    if (!memoryContent) return;
+
+    const section = document.createElement('div');
+    section.className = 'memory-section';
+
+    const title = document.createElement('h4');
+    title.textContent = category.charAt(0).toUpperCase() + category.slice(1);
+
+    const itemsDiv = document.createElement('div');
+    itemsDiv.className = 'memory-items';
+    itemsDiv.id = containerId;
+
+    const placeholder = document.createElement('div');
+    placeholder.className = 'memory-placeholder';
+    placeholder.textContent = `No ${category} mentioned yet`;
+    itemsDiv.appendChild(placeholder);
+
+    section.appendChild(title);
+    section.appendChild(itemsDiv);
+    memoryContent.appendChild(section);
+}
+
+/**
+ * Generic object renderer for unknown memory structures
+ */
+function renderGenericObject(obj) {
+    try {
+        const title = obj.name || obj.title || obj.label || obj.type || '';
+        const entries = Object.entries(obj)
+            .filter(([k, v]) => v !== undefined && v !== null && v !== '')
+            .map(([k, v]) => `<div class="memory-detail"><strong>${capitalize(k)}:</strong> ${typeof v === 'object' ? JSON.stringify(v) : v}</div>`) 
+            .join('');
+        return title
+            ? `<div class="memory-title">${title}</div>${entries}`
+            : entries || `<div class="memory-detail">${JSON.stringify(obj)}</div>`;
+    } catch (e) {
+        return `<div class="memory-detail">${JSON.stringify(obj)}</div>`;
+    }
+}
+
+function capitalize(str) {
+    const s = String(str || '');
+    return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/**
  * Create a single memory item element (helper for batching)
  */
 function createMemoryItemElement(category, item) {
@@ -781,7 +851,7 @@ function createMemoryItemElement(category, item) {
                         ${item.details ? `<div class="memory-detail">${item.details}</div>` : ''}
                     `;
                 } else {
-                    itemDiv.textContent = item.person || JSON.stringify(item);
+                    itemDiv.innerHTML = renderGenericObject(item);
                 }
                 break;
                 
@@ -797,7 +867,7 @@ function createMemoryItemElement(category, item) {
                         ${item.details ? `<div class="memory-detail">${item.details}</div>` : ''}
                     `;
                 } else {
-                    itemDiv.textContent = item.date || item.time || JSON.stringify(item);
+                    itemDiv.innerHTML = renderGenericObject(item);
                 }
                 break;
                 
@@ -812,7 +882,7 @@ function createMemoryItemElement(category, item) {
                         ${item.details ? `<div class="memory-detail">${item.details}</div>` : ''}
                     `;
                 } else {
-                    itemDiv.textContent = JSON.stringify(item);
+                    itemDiv.innerHTML = renderGenericObject(item);
                 }
                 break;
                 
@@ -833,27 +903,32 @@ function createMemoryItemElement(category, item) {
                         ${item.details ? `<div class="memory-detail">${item.details}</div>` : ''}
                     `;
                 } else {
-                    itemDiv.textContent = item.person || JSON.stringify(item);
+                    itemDiv.innerHTML = renderGenericObject(item);
                 }
                 break;
                 
             case 'events':
-                if (item.event || item.description) {
-                    const eventTitle = item.event || item.description;
-                    itemDiv.innerHTML = `
-                        <div class="memory-title">${eventTitle}</div>
-                        ${item.timeframe ? `<div class="memory-detail">When: ${item.timeframe}</div>` : ''}
-                        ${item.location ? `<div class="memory-detail">Where: ${item.location}</div>` : ''}
-                        ${item.significance ? `<div class="memory-detail">Significance: ${item.significance}</div>` : ''}
-                        ${item.details ? `<div class="memory-detail">${item.details}</div>` : ''}
-                    `;
-                } else {
-                    itemDiv.textContent = JSON.stringify(item);
+                {
+                    const eventTitle = item.event || item.description || item.name || item.title || item.type;
+                    if (eventTitle) {
+                        itemDiv.innerHTML = `
+                            <div class="memory-title">${eventTitle}</div>
+                            ${item.type ? `<div class="memory-detail">Type: ${item.type}</div>` : ''}
+                            ${item.timeframe ? `<div class="memory-detail">When: ${item.timeframe}</div>` : ''}
+                            ${item.date ? `<div class="memory-detail">Date: ${item.date}</div>` : ''}
+                            ${item.location ? `<div class="memory-detail">Where: ${item.location}</div>` : ''}
+                            ${item.significance ? `<div class="memory-detail">Significance: ${item.significance}</div>` : ''}
+                            ${item.participants ? `<div class="memory-detail">Who: ${Array.isArray(item.participants) ? item.participants.join(', ') : item.participants}</div>` : ''}
+                            ${item.details ? `<div class="memory-detail">${item.details}</div>` : ''}
+                        `;
+                    } else {
+                        itemDiv.innerHTML = renderGenericObject(item);
+                    }
                 }
                 break;
                 
             default:
-                itemDiv.textContent = JSON.stringify(item);
+                itemDiv.innerHTML = renderGenericObject(item);
         }
     } else {
         itemDiv.textContent = String(item);

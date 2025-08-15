@@ -83,6 +83,14 @@ function sseWrite(res, event, data) {
     res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
+// Utility to enforce timeouts on async operations
+function withTimeout(promise, ms, message) {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(message || `Timeout after ${ms}ms`)), ms))
+    ]);
+}
+
 // System prompts for agents
 const COLLABORATOR_SYSTEM_PROMPT = `You are a gentle, empathetic Collaborator helping elderly people preserve their life stories and family memories. You embody the warmth and patience of a caring family member or trusted friend who genuinely wants to help preserve precious memories.
 
@@ -223,12 +231,12 @@ app.post('/chat', async (req, res) => {
     (async () => {
         try {
             const memoryPrompt = `Extract structured memories from the following message. Respond with ONLY valid JSON matching keys: people, dates, places, relationships, events.\n\nMessage: ${JSON.stringify(text)}`;
-            const memResp = await anthropic.messages.create({
+            const memResp = await withTimeout(anthropic.messages.create({
                 model: MEMORY_MODEL,
                 max_tokens: 300,
                 system: MEMORY_KEEPER_SYSTEM_PROMPT,
                 messages: [{ role: 'user', content: memoryPrompt }]
-            });
+            }), 20000, 'Anthropic memory extraction timeout');
             let payload;
             try {
                 payload = JSON.parse(memResp.content?.[0]?.text || '{}');
@@ -245,14 +253,14 @@ app.post('/chat', async (req, res) => {
 
     // Stream collaborator response
     try {
-        const collabResp = await anthropic.messages.create({
+        const collabResp = await withTimeout(anthropic.messages.create({
             model: COLLABORATOR_MODEL,
             max_tokens: 500,
             system: COLLABORATOR_SYSTEM_PROMPT,
             messages: [
                 { role: 'user', content: text }
             ]
-        });
+        }), 20000, 'Anthropic collaborator timeout');
 
         const fullText = collabResp.content?.[0]?.text || '';
         // Tokenize rudimentarily for demo streaming if SDK streaming isn't used
@@ -305,7 +313,7 @@ app.post('/api/collaborator', async (req, res) => {
 
         // Build conversation context
         const messages = [
-            ...conversationHistory.slice(-6), // Keep last 6 messages for context
+            ...conversationHistory.slice(-4), // Keep last 4 messages for context (smaller prompt)
             {
                 role: 'user',
                 content: message
@@ -313,12 +321,12 @@ app.post('/api/collaborator', async (req, res) => {
         ];
 
         const effectiveModel = sanitizeModel(model, process.env.COLLABORATOR_MODEL || 'claude-3-5-haiku-latest');
-        const response = await anthropic.messages.create({
+        const response = await withTimeout(anthropic.messages.create({
             model: effectiveModel,
-            max_tokens: 1000,
+            max_tokens: 500,
             system: COLLABORATOR_SYSTEM_PROMPT,
             messages: messages
-        });
+        }), 20000, 'Anthropic collaborator timeout');
 
         const collaboratorResponse = response.content[0].text;
 
@@ -372,7 +380,7 @@ Message: "${message}"`;
         console.log('System prompt length:', MEMORY_KEEPER_SYSTEM_PROMPT.length);
 
         const effectiveModel = sanitizeModel(model, process.env.MEMORY_MODEL || 'claude-3-5-haiku-latest');
-        const response = await anthropic.messages.create({
+        const response = await withTimeout(anthropic.messages.create({
             model: effectiveModel,
             max_tokens: 300,
             system: MEMORY_KEEPER_SYSTEM_PROMPT,
@@ -380,7 +388,7 @@ Message: "${message}"`;
                 role: 'user',
                 content: promptContent
             }]
-        });
+        }), 20000, 'Anthropic memory keeper timeout');
 
         console.log('Claude raw response:', response.content[0].text);
         console.log('Response length:', response.content[0].text.length);
