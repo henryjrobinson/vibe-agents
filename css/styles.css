@@ -466,8 +466,9 @@ body {
 .main-content {
     display: flex;
     flex: 1;
-    height: calc(100vh - 4rem);
-    overflow: hidden;
+    /* Allow the page to scroll while constraining inner panes */
+    min-height: calc(100vh - 4rem);
+    overflow: visible;
 }
 
 .chat-section {
@@ -475,6 +476,8 @@ body {
     display: flex;
     flex-direction: column;
     min-width: 0;
+    /* Keep the chat pane within the viewport height under header */
+    max-height: calc(100vh - 4rem);
 }
 
 .chat-messages {
@@ -719,6 +722,8 @@ body {
     border-left: 1px solid #e1e8ed;
     display: flex;
     flex-direction: column;
+    /* Constrain memory panel height; inner content scrolls */
+    max-height: calc(100vh - 4rem);
     overflow: hidden;
     transition: var(--transition-medium);
 }
@@ -946,7 +951,9 @@ body {
     
     .main-content {
         flex-direction: column;
-        height: calc(100vh - 3.5rem);
+        /* Allow page scroll on mobile too */
+        min-height: calc(100vh - 3.5rem);
+        overflow: visible;
     }
     
     .dropdown-menu {
