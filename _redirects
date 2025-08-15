@@ -1,6 +1,0 @@
-# API redirects to Netlify Functions
-/api/collaborator /.netlify/functions/collaborator 200
-/api/memory-keeper /.netlify/functions/memory-keeper 200
-
-# SPA fallback
-/* /index.html 200
