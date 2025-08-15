@@ -7,6 +7,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { EventEmitter } = require('events');
 require('dotenv').config();
 const { executeTool } = require('./server/tools');
+const memoryStore = require('./server/storage');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -15,6 +16,23 @@ const PORT = process.env.PORT || 3000;
 const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
 });
+
+// List memories for a conversation (after middleware)
+app.get('/api/memories', (req, res) => {
+    const { conversationId = 'default' } = req.query || {};
+    const list = memoryStore.listMemories(conversationId);
+    res.json({ conversationId, count: list.length, memories: list });
+});
+
+// Get a single memory by id (after middleware)
+app.get('/api/memories/:id', (req, res) => {
+    const { conversationId = 'default' } = req.query || {};
+    const { id } = req.params;
+    const mem = memoryStore.getMemory(conversationId, id);
+    if (!mem) return res.status(404).json({ error: 'Memory not found' });
+    res.json(mem);
+});
+
 
 // Security middleware
 app.use(helmet({
@@ -241,7 +259,9 @@ app.post('/chat', async (req, res) => {
                 'Anthropic memory extraction timeout'
             ).catch(() => ({ people: [], dates: [], places: [], relationships: [], events: [] }));
             const chan = getChannel(conversationId);
-            chan.emit('memory', { messageId, ...payload });
+            // Persist only if non-empty
+            const saved = memoryStore.saveMemory({ conversationId, messageId, payload });
+            chan.emit('memory', { messageId, ...payload, id: saved?.id || null });
         } catch (err) {
             const chan = getChannel(conversationId);
             chan.emit('memory', { messageId, error: 'memory_extraction_failed' });
@@ -345,7 +365,7 @@ app.post('/api/collaborator', async (req, res) => {
 // Memory Keeper agent endpoint
 app.post('/api/memory-keeper', async (req, res) => {
     try {
-        const { message, model } = req.body;
+        const { message, model, conversationId = 'default', messageId } = req.body;
 
         console.log('=== MEMORY KEEPER DEBUG ===');
         console.log('Input message:', message);
@@ -367,8 +387,21 @@ app.post('/api/memory-keeper', async (req, res) => {
             'Anthropic memory keeper timeout'
         ).catch(() => ({ people: [], dates: [], places: [], relationships: [], events: [] }));
 
+        // Save if non-empty and return saved id
+        const saved = memoryStore.saveMemory({ conversationId, messageId, payload: extractedMemories });
+
+        // Emit SSE event so connected clients receive updates even when using REST flow
+        try {
+            const chan = getChannel(conversationId);
+            chan.emit('memory', { messageId, ...extractedMemories, id: saved?.id || null });
+        } catch (e) {
+            // Non-fatal
+            console.warn('SSE emit failed:', e.message);
+        }
+
         res.json({
             memories: extractedMemories,
+            id: saved?.id || null,
             agent: 'memory-keeper',
             timestamp: new Date().toISOString()
         });

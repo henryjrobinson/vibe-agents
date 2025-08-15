@@ -19,6 +19,92 @@ let loggingModeEnabled = false;
 let selectedModel = 'claude-3-5-haiku-latest'; // Default model - Fast and reliable
 let logEntries = [];
 
+// Conversation/session identifiers and SSE state
+let conversationId = null;
+let eventSource = null;
+const seenMemoryIds = new Set();
+
+// Generate or load a persistent conversationId
+function getConversationId() {
+    if (conversationId) return conversationId;
+    try {
+        const stored = localStorage.getItem('conversationId');
+        if (stored) {
+            conversationId = stored;
+            return conversationId;
+        }
+        const id = (crypto && crypto.randomUUID) ? crypto.randomUUID() : `c_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        localStorage.setItem('conversationId', id);
+        conversationId = id;
+        return conversationId;
+    } catch (_) {
+        conversationId = `c_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        return conversationId;
+    }
+}
+
+// Generate a per-message id
+function generateMessageId() {
+    return `m_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+// Initialize SSE connection for memory updates
+function initializeSSE() {
+    const id = getConversationId();
+    try {
+        if (eventSource) {
+            try { eventSource.close(); } catch (_) {}
+            eventSource = null;
+        }
+        eventSource = new EventSource(`/events?conversationId=${encodeURIComponent(id)}`);
+
+        eventSource.onopen = () => {
+            updateMemoryStatus('Ready');
+            addLogEntry('info', 'SSE', { status: 'open', conversationId: id }, false);
+        };
+
+        eventSource.onerror = (err) => {
+            // EventSource auto-reconnects; just log
+            addLogEntry('error', 'SSE', { error: 'connection_error', details: String(err) }, false);
+        };
+
+        eventSource.addEventListener('memory', (ev) => {
+            try {
+                const data = JSON.parse(ev.data || '{}');
+                // Dedupe based on saved memory id if present
+                if (data.id && seenMemoryIds.has(data.id)) return;
+                if (data.id) seenMemoryIds.add(data.id);
+
+                if (data.error) {
+                    updateMemoryStatus('Error processing memories');
+                    addLogEntry('error', 'Memory Keeper', data, false);
+                    return;
+                }
+
+                const extracted = {
+                    people: Array.isArray(data.people) ? data.people : [],
+                    dates: Array.isArray(data.dates) ? data.dates : [],
+                    places: Array.isArray(data.places) ? data.places : [],
+                    relationships: Array.isArray(data.relationships) ? data.relationships : [],
+                    events: Array.isArray(data.events) ? data.events : []
+                };
+
+                // If nothing meaningful, ignore
+                const hasAny = Object.values(extracted).some(arr => arr && arr.length > 0);
+                if (!hasAny) return;
+
+                updateMemoryDisplay(extracted);
+                updateMemoryStatus('Complete');
+                addLogEntry('output', 'Memory Keeper', { source: 'sse', ...data }, false);
+            } catch (e) {
+                addLogEntry('error', 'SSE', { error: 'parse_error', details: String(e) }, false);
+            }
+        });
+    } catch (e) {
+        addLogEntry('error', 'SSE', { error: 'init_failed', details: String(e) }, false);
+    }
+}
+
 // Small helper to enforce client-side timeouts for fetch
 async function fetchWithTimeout(resource, options = {}) {
     const { timeout = 20000, ...rest } = options;
@@ -79,6 +165,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     initializeButtons();
     initializeModelSelector();
     initializeDebugPanel();
+    initializeSSE();
     await loadSecureSession(); // Load encrypted session data
     
     // Auto-trigger initial conversation for new users
@@ -484,7 +571,9 @@ async function processWithMemoryKeeper(message) {
     try {
         const requestBody = { 
             message,
-            model: selectedModel 
+            model: selectedModel,
+            conversationId: getConversationId(),
+            messageId: generateMessageId()
         };
         
         // Log the input request
