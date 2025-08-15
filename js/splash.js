@@ -5,7 +5,39 @@
 
 class SplashPage {
     constructor() {
+        this.currentAuthMode = 'signin';
         this.init();
+    }
+
+    // ===== Modal helpers =====
+    setupModalListeners() {
+        const modal = document.getElementById('how-it-works-modal');
+        if (!modal) return;
+
+        // Close on backdrop or close button
+        modal.addEventListener('click', (e) => {
+            const target = e.target;
+            if (target && (target.getAttribute('data-close') === 'true')) {
+                this.closeModal();
+            }
+        });
+    }
+
+    openHowItWorksModal() {
+        const modal = document.getElementById('how-it-works-modal');
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        // focus heading for accessibility
+        const title = modal.querySelector('#how-it-works-title');
+        if (title) title.focus?.();
+        document.body.style.overflow = 'hidden';
+    }
+
+    closeModal() {
+        const modal = document.getElementById('how-it-works-modal');
+        if (!modal) return;
+        modal.classList.add('hidden');
+        document.body.style.overflow = '';
     }
 
     init() {
@@ -22,24 +54,57 @@ class SplashPage {
     }
 
     setupEventListeners() {
-        // Get started button
-        const getStartedBtn = document.getElementById('get-started-btn');
-        if (getStartedBtn) {
-            getStartedBtn.addEventListener('click', (e) => {
+        // Auth toggle buttons
+        const authToggleBtns = document.querySelectorAll('.auth-toggle-btn');
+        authToggleBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                this.handleAuthToggle(e.target.dataset.mode);
+            });
+        });
+
+        // Auth submit button
+        const authSubmitBtn = document.getElementById('auth-submit-btn');
+        if (authSubmitBtn) {
+            authSubmitBtn.addEventListener('click', (e) => {
                 e.preventDefault();
-                this.handleGetStarted();
+                this.handleAuthSubmit();
             });
         }
 
+        // How it Works link opens modal
+        const howItWorksLink = document.getElementById('how-it-works-link');
+        if (howItWorksLink) {
+            howItWorksLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.openHowItWorksModal();
+            });
+        }
 
+        // In-page hash navigation for other nav links (do not block mailto links)
+        const navLinks = document.querySelectorAll('.nav-link');
+        navLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                const href = link.getAttribute('href') || '';
+                if (href.startsWith('#') && link.id !== 'how-it-works-link') {
+                    e.preventDefault();
+                    this.handleNavigation(href);
+                }
+            });
+        });
+
+        // Modal listeners
+        this.setupModalListeners();
 
         // Handle keyboard navigation
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 const activeElement = document.activeElement;
-                if (activeElement && activeElement.classList.contains('primary-btn')) {
+                if (activeElement && (activeElement.classList.contains('auth-submit-btn') || activeElement.classList.contains('auth-toggle-btn'))) {
                     activeElement.click();
                 }
+            }
+            if (e.key === 'Escape') {
+                this.closeModal();
             }
         });
     }
@@ -62,7 +127,7 @@ class SplashPage {
         const cardHeader = document.querySelector('.card-header');
         if (cardHeader) {
             cardHeader.innerHTML = `
-                <h2>Welcome to Story Collection</h2>
+                <h2>Welcome to MemoryKeeper</h2>
                 <p>Share your life stories with AI agents who listen, understand, and help preserve your precious memories.</p>
             `;
         }
@@ -75,12 +140,6 @@ class SplashPage {
                 <h2>Welcome Back!</h2>
                 <p>Ready to continue sharing your stories? Your memories are waiting for you.</p>
             `;
-        }
-
-        // Update button text for returning users
-        const getStartedBtn = document.getElementById('get-started-btn');
-        if (getStartedBtn) {
-            getStartedBtn.textContent = 'Continue Your Stories';
         }
     }
 
@@ -95,23 +154,129 @@ class SplashPage {
         }
     }
 
-    handleGetStarted() {
-        console.log('🚀 User clicked Get Started');
+    handleAuthToggle(mode) {
+        console.log('🔄 Auth mode changed to:', mode);
+        
+        const isSignUp = mode === 'signup';
+        
+        // Update button styles
+        const authToggleBtns = document.querySelectorAll('.auth-toggle-btn');
+        authToggleBtns.forEach(btn => {
+            if (btn.dataset.mode === mode) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+        
+        // Toggle confirm password and forgot password
+        const confirmPasswordSection = document.getElementById('confirm-password-section');
+        const forgotPasswordLink = document.getElementById('forgot-password-link');
+        const authSubmitBtn = document.getElementById('auth-submit-btn');
+        
+        if (isSignUp) {
+            confirmPasswordSection?.classList.remove('hidden');
+            forgotPasswordLink?.classList.add('hidden');
+            if (authSubmitBtn) authSubmitBtn.textContent = 'Create Account';
+        } else {
+            confirmPasswordSection?.classList.add('hidden');
+            forgotPasswordLink?.classList.remove('hidden');
+            if (authSubmitBtn) authSubmitBtn.textContent = 'Sign In';
+        }
+        
+        this.currentAuthMode = mode;
+    }
+
+    handleAuthSubmit() {
+        console.log('🔐 Auth submit clicked');
+        
+        const email = document.getElementById('email')?.value;
+        const password = document.getElementById('password')?.value;
+        const confirmPassword = document.getElementById('confirm-password')?.value;
+        const isSignUp = this.currentAuthMode === 'signup';
+        
+        // Basic validation
+        if (!email || !password) {
+            this.showAuthError('Please fill in all required fields');
+            return;
+        }
+        
+        if (isSignUp && password !== confirmPassword) {
+            this.showAuthError('Passwords do not match');
+            return;
+        }
+        
+        // Add loading state
+        const authSubmitBtn = document.getElementById('auth-submit-btn');
+        if (authSubmitBtn) {
+            authSubmitBtn.classList.add('loading');
+            authSubmitBtn.textContent = 'Processing...';
+        }
         
         // Mark that user has started using the app
         localStorage.setItem('story-collection-used', 'true');
         
-        // Add a brief loading state for better UX
-        const btn = document.getElementById('get-started-btn');
-        if (btn) {
-            btn.classList.add('loading');
-            btn.textContent = 'Loading...';
+        // Simulate auth process (replace with real Firebase auth later)
+        setTimeout(() => {
+            console.log(`✅ ${isSignUp ? 'Account created' : 'Signed in'} successfully!`);
+            this.continueToApp();
+        }, 1500);
+    }
+    
+    handleNavigation(href) {
+        console.log('🧭 Navigation clicked:', href);
+        
+        // Smooth scroll to sections or handle navigation
+        if (href.startsWith('#')) {
+            const targetId = href.substring(1);
+            const targetElement = document.getElementById(targetId);
+            
+            if (targetElement) {
+                targetElement.scrollIntoView({ 
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            } else {
+                // For now, just scroll to features for any hash link
+                this.showFeatures();
+            }
+        }
+    }
+    
+    showAuthError(message) {
+        console.error('❌ Auth error:', message);
+        
+        // Create or update error message element
+        let errorEl = document.querySelector('.auth-error');
+        if (!errorEl) {
+            errorEl = document.createElement('div');
+            errorEl.className = 'auth-error';
+            errorEl.style.cssText = `
+                color: #e74c3c;
+                font-size: 0.9rem;
+                margin-top: 0.5rem;
+                text-align: center;
+                background: rgba(231, 76, 60, 0.1);
+                padding: 0.5rem;
+                border-radius: 4px;
+                border: 1px solid rgba(231, 76, 60, 0.3);
+            `;
+            
+            const authForm = document.querySelector('.auth-form');
+            if (authForm) {
+                authForm.appendChild(errorEl);
+            }
         }
         
-        // Small delay for better UX, then redirect
+        errorEl.textContent = message;
+        errorEl.style.display = 'block';
+        
+        // Auto-hide after 5 seconds
         setTimeout(() => {
-            this.continueToApp();
-        }, 800);
+            if (errorEl) {
+                errorEl.style.display = 'none';
+            }
+        }, 5000);
     }
 
     continueToApp() {

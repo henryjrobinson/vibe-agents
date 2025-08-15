@@ -10,6 +10,42 @@ let currentSession = {
     }
 };
 
+// Bind SSE lifecycle to Firebase auth state changes
+function setupAuthSSEBinding() {
+    const bind = () => {
+        if (!window.firebaseAuth) return;
+        // React to future auth changes
+        window.firebaseAuth.onAuthStateChanged(async (user) => {
+            if (eventSource) {
+                try { eventSource.close(); } catch (_) {}
+                eventSource = null;
+            }
+            if (user) {
+                // Immediately reflect auth state in UI while SSE connects
+                updateMemoryStatus('Connecting...');
+                await initializeSSE();
+            } else {
+                updateMemoryStatus('Sign in to enable memory updates');
+            }
+        });
+
+        // Handle current state immediately
+        if (window.firebaseAuth.isAuthenticated()) {
+            // Show user we're connecting right away
+            updateMemoryStatus('Connecting...');
+            initializeSSE();
+        } else {
+            updateMemoryStatus('Sign in to enable memory updates');
+        }
+    };
+
+    if (window.firebaseAuth) {
+        bind();
+    } else {
+        window.addEventListener('firebase-ready', bind, { once: true });
+    }
+}
+
 // Secure session management
 const SESSION_STORAGE_KEY = 'story_session';
 let sessionAutoSaveEnabled = true;
@@ -18,6 +54,8 @@ let memoryDisplayVisible = true;
 let loggingModeEnabled = false;
 let selectedModel = 'claude-3-5-haiku-latest'; // Default model - Fast and reliable
 let logEntries = [];
+// Guard to prevent rapid double submissions
+let sendInProgress = false;
 
 // Conversation/session identifiers and SSE state
 let conversationId = null;
@@ -49,14 +87,29 @@ function generateMessageId() {
 }
 
 // Initialize SSE connection for memory updates
-function initializeSSE() {
+async function initializeSSE() {
     const id = getConversationId();
     try {
         if (eventSource) {
             try { eventSource.close(); } catch (_) {}
             eventSource = null;
         }
-        eventSource = new EventSource(`/events?conversationId=${encodeURIComponent(id)}`);
+        
+        // Build SSE URL with auth token if available
+        // Indicate connection attempt before token fetch/network roundtrip
+        updateMemoryStatus('Connecting...');
+        let sseUrl = `/events?conversationId=${encodeURIComponent(id)}`;
+        if (window.firebaseAuth && window.firebaseAuth.isAuthenticated()) {
+            try {
+                // Force refresh to avoid stale tokens in private/incognito mode
+                const token = await window.firebaseAuth.getIdToken(true);
+                sseUrl += `&token=${encodeURIComponent(token)}`;
+            } catch (error) {
+                console.error('Failed to get Firebase token for SSE:', error);
+            }
+        }
+        
+        eventSource = new EventSource(sseUrl);
 
         eventSource.onopen = () => {
             updateMemoryStatus('Ready');
@@ -105,13 +158,30 @@ function initializeSSE() {
     }
 }
 
-// Small helper to enforce client-side timeouts for fetch
+// Small helper to enforce client-side timeouts for fetch with Firebase auth
 async function fetchWithTimeout(resource, options = {}) {
     const { timeout = 20000, ...rest } = options;
+    
+    // Add Firebase auth token to headers if user is authenticated
+    const headers = { ...rest.headers };
+    if (window.firebaseAuth && window.firebaseAuth.isAuthenticated()) {
+        try {
+            const token = await window.firebaseAuth.getIdToken();
+            headers['Authorization'] = `Bearer ${token}`;
+        } catch (error) {
+            console.error('Failed to get Firebase token:', error);
+            // Continue without token - let server handle auth error
+        }
+    }
+    
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeout);
     try {
-        const response = await fetch(resource, { ...rest, signal: controller.signal });
+        const response = await fetch(resource, { 
+            ...rest, 
+            headers,
+            signal: controller.signal 
+        });
         return response;
     } finally {
         clearTimeout(id);
@@ -165,7 +235,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     initializeButtons();
     initializeModelSelector();
     initializeDebugPanel();
-    initializeSSE();
+    setupAuthSSEBinding();
     await loadSecureSession(); // Load encrypted session data
     
     // Auto-trigger initial conversation for new users
@@ -333,8 +403,8 @@ function initializeToggles() {
 function initializeInput() {
     const input = document.getElementById('chat-input');
     if (input) {
-        input.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey && !e.repeat) {
                 e.preventDefault();
                 sendMessage();
             }
@@ -518,7 +588,7 @@ async function sendMessage() {
     const input = document.getElementById('chat-input');
     const sendBtn = document.getElementById('send-btn');
     
-    if (!input || !input.value.trim() || isTyping) return;
+    if (!input || !input.value.trim() || isTyping || sendInProgress) return;
     
     const message = input.value.trim();
     input.value = '';
@@ -530,6 +600,7 @@ async function sendMessage() {
     input.disabled = true;
     sendBtn.disabled = true;
     isTyping = true;
+    sendInProgress = true;
     
     // Show typing indicator
     showTypingIndicator();
@@ -553,6 +624,7 @@ async function sendMessage() {
         input.disabled = false;
         sendBtn.disabled = false;
         isTyping = false;
+        sendInProgress = false;
         hideTypingIndicator();
         input.focus();
     }
@@ -623,8 +695,7 @@ async function processWithMemoryKeeper(message) {
         
         const extractedMemories = data.memories;
         
-        // Update memory display
-        updateMemoryDisplay(extractedMemories);
+        // Do not render memories directly here; rely on SSE 'memory' events to avoid duplicates
         updateMemoryStatus('Complete');
         
     } catch (error) {

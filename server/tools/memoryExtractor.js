@@ -52,7 +52,7 @@ module.exports = {
     // Prefer provided client; else create transient one from apiKey
     const anthropic = context.anthropic || new Anthropic({ apiKey: context.apiKey || process.env.ANTHROPIC_API_KEY });
     const effectiveModel = model || process.env.MEMORY_MODEL || 'claude-3-5-haiku-latest';
-    const max_tokens = typeof maxTokens === 'number' ? maxTokens : 500;
+    const max_tokens = typeof maxTokens === 'number' ? maxTokens : 300;
 
     const promptContent = `Extract information from: ${JSON.stringify(message)}
 

@@ -3,23 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Story Collection - AI Agents for Capturing Life Stories">
+    <meta name="description" content="MemoryKeeper - AI-powered story collection for preserving life memories">
     <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
-    <title>Story Collection - Share Your Life Stories with AI</title>
+    <title>MemoryKeeper - Preserve Your Life Stories with AI</title>
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://vibe-agents.onrender.com/">
-    <meta property="og:title" content="Story Collection - AI Agents for Capturing Life Stories">
+    <meta property="og:title" content="MemoryKeeper - AI-powered story collection">
     <meta property="og:description" content="Share your life stories with AI - Collaborator and Memory Keeper agents help capture and organize your memories">
-    <meta property="og:site_name" content="Story Collection">
+    <meta property="og:site_name" content="MemoryKeeper">
     
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image">
     <meta property="twitter:url" content="https://vibe-agents.onrender.com/">
-    <meta property="twitter:title" content="Story Collection - AI Agents for Capturing Life Stories">
+    <meta property="twitter:title" content="MemoryKeeper - AI-powered story collection">
     <meta property="twitter:description" content="Share your life stories with AI - Collaborator and Memory Keeper agents help capture and organize your memories">
     
+    <!-- Import map for Firebase ESM modules (harmless on splash, used on chat page) -->
+    <script type="importmap" src="/importmap.json"></script>
+
     <link rel="stylesheet" href="css/splash.css">
 </head>
 <body>
@@ -30,59 +33,102 @@
             <!-- Fallback for browsers that don't support video -->
             Your browser does not support the video tag.
         </video>
-        <div class="video-overlay"></div>
     </div>
 
-    <!-- Main Content -->
-    <div class="splash-container">
-        <!-- Header -->
-        <header class="splash-header">
-            <div class="logo">
-                <h1>Story Collection</h1>
-                <p class="tagline">Preserve your memories with AI</p>
-            </div>
-        </header>
-
-        <!-- Main Content Area -->
-        <main class="splash-main">
-            <div class="content-card">
-                <div class="card-header">
-                    <h2>Welcome to Story Collection</h2>
-                    <p>Share your life stories with AI agents who listen, understand, and help preserve your precious memories.</p>
-                </div>
-
-                <div class="action-buttons">
-                    <button class="primary-btn" id="get-started-btn">
-                        Get Started
-                    </button>
-                </div>
-
-                <div class="features-grid">
-                    <div class="feature">
-                        <div class="feature-icon">🤝</div>
-                        <h3>AI Collaborator</h3>
-                        <p>Thoughtful questions and empathetic conversation to help you share your stories naturally.</p>
+    <!-- Landing Page Header -->
+    <header id="landing-header" class="landing-header">
+        <div class="header-container">
+            <div class="header-content">
+                <!-- Logo and Navigation -->
+                <div class="header-left">
+                    <div class="logo">
+                        <h1>MemoryKeeper</h1>
                     </div>
-                    <div class="feature">
-                        <div class="feature-icon">🧠</div>
-                        <h3>Memory Keeper</h3>
-                        <p>Automatically extracts and organizes people, places, dates, and relationships from your stories.</p>
-                    </div>
-                    <div class="feature">
-                        <div class="feature-icon">🔒</div>
-                        <h3>Secure & Private</h3>
-                        <p>Your stories are encrypted and stored securely in your browser. Only you have access to your memories.</p>
-                    </div>
+                    
+                    <nav class="main-nav">
+                        <a href="#how-it-works" id="how-it-works-link" class="nav-link">How it Works</a>
+                        <a href="mailto:henryr@humanrembranceproject.org" id="support-link" class="nav-link">Support</a>
+                    </nav>
                 </div>
             </div>
-        </main>
+        </div>
+    </header>
 
-        <!-- Footer -->
-        <footer class="splash-footer">
-            <p>&copy; 2025 Story Collection. Your memories, preserved with care.</p>
-        </footer>
+    <!-- Centered Login Section -->
+    <div class="login-section">
+        <div class="auth-container">
+            <!-- Auth Toggle -->
+            <div class="auth-toggle">
+                <button id="sign-in-btn" class="auth-toggle-btn active" data-mode="signin">
+                    Sign In
+                </button>
+                <button id="sign-up-btn" class="auth-toggle-btn" data-mode="signup">
+                    Sign Up
+                </button>
+            </div>
+
+            <!-- Auth Form -->
+            <div class="auth-form">
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" placeholder="your@email.com" />
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" placeholder="••••••••" />
+                </div>
+
+                <div id="confirm-password-section" class="form-group hidden">
+                    <label for="confirm-password">Confirm Password</label>
+                    <input type="password" id="confirm-password" placeholder="••••••••" />
+                </div>
+
+                <button id="auth-submit-btn" class="auth-submit-btn">
+                    Sign In
+                </button>
+
+                <div id="forgot-password-link" class="forgot-password">
+                    <a href="#forgot-password">Forgot your password?</a>
+                </div>
+            </div>
+        </div>
     </div>
 
+    <!-- Footer -->
+    <footer class="splash-footer">
+        <p>&copy; 2025 MemoryKeeper. Your memories, preserved with care.</p>
+    </footer>
+
+    <!-- How It Works Modal -->
+    <div id="how-it-works-modal" class="mk-modal hidden" role="dialog" aria-modal="true" aria-labelledby="how-it-works-title">
+        <div class="mk-modal-backdrop" data-close="true"></div>
+        <div class="mk-modal-content" role="document">
+            <button class="mk-modal-close" aria-label="Close" data-close="true">&times;</button>
+            <h2 id="how-it-works-title" tabindex="-1">How MemoryKeeper Works</h2>
+            <div class="mk-modal-body">
+                <p>
+                    MemoryKeeper is like a friendly helper who listens while you share your life stories.
+                    You talk in simple, everyday language. Our assistant gently asks questions, writes down
+                    important details for you, and keeps everything safe and organized.
+                </p>
+                <ul>
+                    <li><strong>Easy to start:</strong> Just sign in and say hello. No tech skills needed.</li>
+                    <li><strong>Warm conversation:</strong> The helper talks with you kindly and patiently.</li>
+                    <li><strong>We do the writing:</strong> You speak, we neatly save names, places, and dates.</li>
+                    <li><strong>Your memories are yours:</strong> Only you can see them unless you choose to share.</li>
+                    <li><strong>Come back anytime:</strong> Pick up where you left off whenever you like.</li>
+                </ul>
+                <p>
+                    Think of it as sitting with a trusted friend who helps you remember, so your family
+                    can treasure your stories for years to come.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Expose environment before config -->
+    <script src="/env.js"></script>
     <script src="js/config.js"></script>
     <script src="js/splash.js"></script>
 </body>

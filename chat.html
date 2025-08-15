@@ -3,64 +3,110 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Story Collection - AI Agents for Capturing Life Stories">
+    <meta name="description" content="MemoryKeeper - AI-powered story collection for preserving life memories">
     <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
-    <title>Story Collection - AI Agents for Capturing Life Stories</title>
+    <title>MemoryKeeper - AI Chat</title>
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://vibe-agents.onrender.com/">
-    <meta property="og:title" content="Story Collection - AI Agents for Capturing Life Stories">
+    <meta property="og:title" content="MemoryKeeper - AI-powered story collection">
     <meta property="og:description" content="Share your life stories with AI - Collaborator and Memory Keeper agents help capture and organize your memories">
-    <meta property="og:site_name" content="Story Collection">
+    <meta property="og:site_name" content="MemoryKeeper">
     
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image">
     <meta property="twitter:url" content="https://vibe-agents.onrender.com/">
-    <meta property="twitter:title" content="Story Collection - AI Agents for Capturing Life Stories">
+    <meta property="twitter:title" content="MemoryKeeper - AI-powered story collection">
     <meta property="twitter:description" content="Share your life stories with AI - Collaborator and Memory Keeper agents help capture and organize your memories">
     
     <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/auth.css">
     
+    <!-- Import map for Firebase ESM modules -->
+    <script type="importmap" src="/importmap.json"></script>
+
     <!-- Crypto utilities for secure data storage -->
+    <!-- Expose environment before config -->
+    <script src="/env.js"></script>
     <script src="js/config.js"></script>
     <script src="js/crypto-utils.js"></script>
 </head>
 <body>
-    <div class="chat-container">
-        <div class="chat-header">
-            <div class="header-title">Story Collection</div>
-            <div class="header-subtitle">Sharing your life stories with AI</div>
-            <div class="header-actions">
-                <div class="model-selector">
-                    <label for="modelSelect">Claude Model:</label>
-                    <select id="modelSelect" class="model-dropdown">
-                        <option value="claude-3-5-haiku-latest" selected>Claude 3.5 Haiku (Fastest)</option>
-                        <option value="claude-3-5-sonnet-latest">Claude 3.5 Sonnet (Intelligent)</option>
-                    </select>
+    <!-- App Header -->
+    <header id="app-header" class="app-header">
+        <div class="app-header-container">
+            <div class="app-header-content">
+                <!-- Logo -->
+                <div class="app-logo">
+                    <h1>MemoryKeeper</h1>
                 </div>
-                <div class="controls">
-                    <div class="toggle-group">
-                        <!-- Memory Keeper toggle hidden for cleaner UI -->
-                        <!-- <label class="toggle-label">
-                            <input type="checkbox" id="memory-display-toggle" checked>
-                            <span class="toggle-slider"></span>
-                            Memory Keeper
-                        </label> -->
-                        <label class="toggle-label">
-                            <input type="checkbox" id="logging-mode-toggle">
-                            <span class="toggle-slider"></span>
-                            Logging Mode
-                        </label>
+
+                <!-- Controls -->
+                <div class="app-controls">
+                    <!-- Create Artifact Button -->
+                    <button id="create-artifact-btn" class="control-btn artifact-btn" aria-label="Create Artifact">
+                        <span class="btn-icon">✨</span>
+                        <span class="btn-text">Create Artifact</span>
+                        <span class="btn-text-mobile">Create</span>
+                    </button>
+
+                    <!-- Reset Chat -->
+                    <button id="reset-chat-btn" class="control-btn reset-btn" aria-label="Reset Chat">
+                        <span class="btn-icon">↻</span>
+                        <span class="btn-text">Reset Chat</span>
+                        <span class="btn-text-mobile">Reset</span>
+                    </button>
+
+                    <!-- Export Chat -->
+                    <button id="export-chat-btn" class="control-btn export-btn" aria-label="Export Chat">
+                        <span class="btn-icon">↓</span>
+                        <span class="btn-text">Export</span>
+                    </button>
+
+                    <!-- AI Model Dropdown -->
+                    <div class="dropdown-container">
+                        <button id="model-dropdown-btn" class="control-btn model-btn">
+                            <span class="btn-icon">⚙</span>
+                            <span id="selected-model" class="btn-text">Claude Sonnet 3.5</span>
+                            <span class="btn-text-mobile">Model</span>
+                            <span class="dropdown-arrow">▼</span>
+                        </button>
+
+                        <div id="model-dropdown" class="dropdown-menu hidden">
+                            <button class="model-option active" data-model="claude-3-5-sonnet-latest">
+                                Claude 3.5 Sonnet
+                            </button>
+                            <button class="model-option" data-model="claude-3-5-haiku-latest">
+                                Claude 3.5 Haiku
+                            </button>
+                        </div>
                     </div>
-                    <button class="action-btn" id="new-story-btn">New Story</button>
-                    <button class="action-btn" id="export-btn">Export</button>
+
+                    <!-- Logout (replaces Profile dropdown) -->
+                    <button id="logout-btn" class="control-btn logout-btn" aria-label="Logout">
+                        <span class="btn-icon">👤</span>
+                        <span class="btn-text">Logout</span>
+                    </button>
                 </div>
             </div>
         </div>
-        
-        <div class="main-content">
+    </header>
+
+    <div class="chat-container">
+        <!-- Authentication Required Message -->
+        <div class="auth-required hidden" id="auth-required">
+            <h3>🔒 Sign In Required</h3>
+            <p>Please sign in to access your personal story collection and chat with our AI agents.</p>
+            <button class="auth-btn primary" id="auth-required-signin">Sign In</button>
+        </div>
+
+        <div class="main-content" id="chat-container">
             <div class="chat-section">
+                <div class="chat-collab-header" aria-label="Collaborator chat header">
+                    <h3>Collaborator</h3>
+                    <div class="chat-status" id="chat-status">Ready</div>
+                </div>
                 <div class="chat-messages" id="chat-messages">
                     <!-- Messages will be added here -->
                 </div>
@@ -152,6 +198,10 @@
 
 
 
+    <!-- Firebase and Authentication Scripts -->
+    <script type="module" src="js/firebase-config.js"></script>
+    <script src="js/auth-ui.js"></script>
+    <script src="js/app-header.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
