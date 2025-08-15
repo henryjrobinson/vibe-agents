@@ -16,7 +16,7 @@ let sessionAutoSaveEnabled = true;
 let isTyping = false;
 let memoryDisplayVisible = true;
 let loggingModeEnabled = false;
-let selectedModel = 'claude-opus-4-20250514'; // Default model - Claude 4 Opus (Most Capable)
+let selectedModel = 'claude-3-5-haiku-latest'; // Default model - Fast and reliable
 let logEntries = [];
 
 /**
@@ -483,7 +483,7 @@ async function processWithMemoryKeeper(message) {
         
         console.log('Sending request to Memory Keeper API:', requestBody);
         
-        const response = await fetch('/api/memory-keeper', {
+        const response = await fetch(window.API_CONFIG.MEMORY_KEEPER, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -566,7 +566,7 @@ async function processWithCollaborator(message) {
             timestamp: new Date().toISOString()
         }, true);
         
-        const response = await fetch('/api/collaborator', {
+        const response = await fetch(window.API_CONFIG.COLLABORATOR, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -690,7 +690,7 @@ function addMessage(type, agent, content, metadata = {}) {
 }
 
 /**
- * Update memory display with extracted memories
+ * Update memory display with extracted memories using DOM batching for performance
  */
 function updateMemoryDisplay(extractedMemories) {
     if (!extractedMemories) {
@@ -700,22 +700,17 @@ function updateMemoryDisplay(extractedMemories) {
     
     console.log('Updating memory display with:', extractedMemories);
     
-    // Update each category
-    if (extractedMemories.people && extractedMemories.people.length > 0) {
-        extractedMemories.people.forEach(person => addMemoryItem('people', person));
-    }
-    if (extractedMemories.dates && extractedMemories.dates.length > 0) {
-        extractedMemories.dates.forEach(date => addMemoryItem('dates', date));
-    }
-    if (extractedMemories.places && extractedMemories.places.length > 0) {
-        extractedMemories.places.forEach(place => addMemoryItem('places', place));
-    }
-    if (extractedMemories.relationships && extractedMemories.relationships.length > 0) {
-        extractedMemories.relationships.forEach(rel => addMemoryItem('relationships', rel));
-    }
-    if (extractedMemories.events && extractedMemories.events.length > 0) {
-        extractedMemories.events.forEach(event => addMemoryItem('events', event));
-    }
+    // Use requestAnimationFrame for smooth DOM updates
+    requestAnimationFrame(() => {
+        // Batch all DOM updates using documentFragment for better performance
+        const categories = ['people', 'dates', 'places', 'relationships', 'events'];
+        
+        categories.forEach(category => {
+            if (extractedMemories[category] && extractedMemories[category].length > 0) {
+                batchAddMemoryItems(category, extractedMemories[category]);
+            }
+        });
+    });
     
     // Update session memories
     let memoriesUpdated = false;
@@ -737,7 +732,138 @@ function updateMemoryDisplay(extractedMemories) {
 }
 
 /**
- * Add memory item to display
+ * Batch add multiple memory items using documentFragment for better performance
+ */
+function batchAddMemoryItems(category, items) {
+    const container = document.getElementById(`memory-${category}`);
+    if (!container || !items.length) return;
+    
+    // Remove placeholder if it exists
+    const placeholder = container.querySelector('.memory-placeholder');
+    if (placeholder) {
+        placeholder.remove();
+    }
+    
+    console.log(`Batch adding ${items.length} memory items to ${category}`);
+    
+    // Create documentFragment for batched DOM operations
+    const fragment = document.createDocumentFragment();
+    
+    // Create all elements in memory first
+    items.forEach(item => {
+        const itemElement = createMemoryItemElement(category, item);
+        if (itemElement) {
+            fragment.appendChild(itemElement);
+        }
+    });
+    
+    // Single DOM append for all items - much faster than individual appends
+    container.appendChild(fragment);
+}
+
+/**
+ * Create a single memory item element (helper for batching)
+ */
+function createMemoryItemElement(category, item) {
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'memory-item';
+    
+    // Handle different item formats and categories (same logic as before)
+    if (typeof item === 'string') {
+        itemDiv.textContent = item;
+    } else if (typeof item === 'object' && item !== null) {
+        switch (category) {
+            case 'people':
+                if (item.name) {
+                    itemDiv.innerHTML = `
+                        <div class="memory-title">${item.name}</div>
+                        ${item.relationship ? `<div class="memory-detail">Relationship: ${item.relationship}</div>` : ''}
+                        ${item.details ? `<div class="memory-detail">${item.details}</div>` : ''}
+                    `;
+                } else {
+                    itemDiv.textContent = item.person || JSON.stringify(item);
+                }
+                break;
+                
+            case 'dates':
+                if (item.event || item.description || item.name) {
+                    const title = item.event || item.description || item.name;
+                    itemDiv.innerHTML = `
+                        <div class="memory-title">${title}</div>
+                        ${item.timeframe ? `<div class="memory-detail">When: ${item.timeframe}</div>` : ''}
+                        ${item.date ? `<div class="memory-detail">Date: ${item.date}</div>` : ''}
+                        ${item.time ? `<div class="memory-detail">Time: ${item.time}</div>` : ''}
+                        ${item.significance ? `<div class="memory-detail">Significance: ${item.significance}</div>` : ''}
+                        ${item.details ? `<div class="memory-detail">${item.details}</div>` : ''}
+                    `;
+                } else {
+                    itemDiv.textContent = item.date || item.time || JSON.stringify(item);
+                }
+                break;
+                
+            case 'places':
+                if (item.location || item.place || item.name) {
+                    const title = item.location || item.place || item.name;
+                    itemDiv.innerHTML = `
+                        <div class="memory-title">${title}</div>
+                        ${item.significance ? `<div class="memory-detail">Significance: ${item.significance}</div>` : ''}
+                        ${item.type ? `<div class="memory-detail">Type: ${item.type}</div>` : ''}
+                        ${item.description ? `<div class="memory-detail">${item.description}</div>` : ''}
+                        ${item.details ? `<div class="memory-detail">${item.details}</div>` : ''}
+                    `;
+                } else {
+                    itemDiv.textContent = JSON.stringify(item);
+                }
+                break;
+                
+            case 'relationships':
+                if (item.person1 && item.person2 && item.type) {
+                    itemDiv.innerHTML = `
+                        <div class="memory-title">${item.person1} ↔ ${item.person2}</div>
+                        <div class="memory-detail">Relationship: ${item.type}</div>
+                        ${item.details ? `<div class="memory-detail">${item.details}</div>` : ''}
+                    `;
+                } else if (item.connection || item.relationship || item.name) {
+                    const title = item.connection || item.relationship || item.name;
+                    itemDiv.innerHTML = `
+                        <div class="memory-title">${title}</div>
+                        ${item.nature ? `<div class="memory-detail">Type: ${item.nature}</div>` : ''}
+                        ${item.type ? `<div class="memory-detail">Type: ${item.type}</div>` : ''}
+                        ${item.description ? `<div class="memory-detail">${item.description}</div>` : ''}
+                        ${item.details ? `<div class="memory-detail">${item.details}</div>` : ''}
+                    `;
+                } else {
+                    itemDiv.textContent = item.person || JSON.stringify(item);
+                }
+                break;
+                
+            case 'events':
+                if (item.event || item.description) {
+                    const eventTitle = item.event || item.description;
+                    itemDiv.innerHTML = `
+                        <div class="memory-title">${eventTitle}</div>
+                        ${item.timeframe ? `<div class="memory-detail">When: ${item.timeframe}</div>` : ''}
+                        ${item.location ? `<div class="memory-detail">Where: ${item.location}</div>` : ''}
+                        ${item.significance ? `<div class="memory-detail">Significance: ${item.significance}</div>` : ''}
+                        ${item.details ? `<div class="memory-detail">${item.details}</div>` : ''}
+                    `;
+                } else {
+                    itemDiv.textContent = JSON.stringify(item);
+                }
+                break;
+                
+            default:
+                itemDiv.textContent = JSON.stringify(item);
+        }
+    } else {
+        itemDiv.textContent = String(item);
+    }
+    
+    return itemDiv;
+}
+
+/**
+ * Add memory item to display (legacy function - kept for compatibility)
  */
 function addMemoryItem(category, item) {
     const container = document.getElementById(`memory-${category}`);
@@ -899,22 +1025,93 @@ function updateMemoryStatus(status) {
 }
 
 /**
- * Show typing indicator
+ * Show typing indicator with progressive messages
  */
 function showTypingIndicator() {
     const indicator = document.getElementById('typing-indicator');
     if (indicator) {
         indicator.style.display = 'flex';
+        
+        // Progressive loading messages for better perceived performance
+        const messages = [
+            'Processing your story...',
+            'Extracting memories...',
+            'Generating response...',
+            'Almost ready...'
+        ];
+        
+        let messageIndex = 0;
+        const messageElement = indicator.querySelector('.typing-message');
+        
+        // Update message every 800ms for perceived progress
+        const messageInterval = setInterval(() => {
+            if (messageElement && messageIndex < messages.length - 1) {
+                messageIndex++;
+                messageElement.textContent = messages[messageIndex];
+            }
+        }, 800);
+        
+        // Animate progress bar for visual feedback
+        const progressBar = indicator.querySelector('#typing-progress-bar');
+        let progress = 0;
+        const progressInterval = setInterval(() => {
+            progress += Math.random() * 15 + 5; // Random progress increments for realistic feel
+            if (progress > 85) progress = 85; // Cap at 85% until completion
+            if (progressBar) {
+                progressBar.style.width = `${progress}%`;
+            }
+        }, 200);
+        
+        // Store interval IDs for cleanup
+        indicator.dataset.messageInterval = messageInterval;
+        indicator.dataset.progressInterval = progressInterval;
+        
+        // Set initial message and progress
+        if (messageElement) {
+            messageElement.textContent = messages[0];
+        }
+        if (progressBar) {
+            progressBar.style.width = '10%';
+        }
     }
 }
 
 /**
- * Hide typing indicator
+ * Hide typing indicator and cleanup intervals
  */
 function hideTypingIndicator() {
     const indicator = document.getElementById('typing-indicator');
     if (indicator) {
         indicator.style.display = 'none';
+        
+        // Clean up intervals to prevent memory leaks
+        const messageInterval = indicator.dataset.messageInterval;
+        const progressInterval = indicator.dataset.progressInterval;
+        
+        if (messageInterval) {
+            clearInterval(parseInt(messageInterval));
+            delete indicator.dataset.messageInterval;
+        }
+        
+        if (progressInterval) {
+            clearInterval(parseInt(progressInterval));
+            delete indicator.dataset.progressInterval;
+        }
+        
+        // Complete progress bar animation before hiding
+        const progressBar = indicator.querySelector('#typing-progress-bar');
+        if (progressBar) {
+            progressBar.style.width = '100%';
+            setTimeout(() => {
+                progressBar.style.width = '0%';
+            }, 300);
+        }
+        
+        // Reset message text
+        const messageElement = indicator.querySelector('.typing-message');
+        if (messageElement) {
+            messageElement.textContent = '';
+        }
     }
 }
 

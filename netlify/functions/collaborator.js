@@ -62,12 +62,19 @@ exports.handler = async (event, context) => {
             }
         ];
 
-        const response = await anthropic.messages.create({
+        // Add timeout to prevent hanging
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Claude API timeout after 25 seconds')), 25000);
+        });
+        
+        const apiPromise = anthropic.messages.create({
             model: model,
             max_tokens: 1000,
             system: COLLABORATOR_SYSTEM_PROMPT,
             messages: messages
         });
+        
+        const response = await Promise.race([apiPromise, timeoutPromise]);
 
         const collaboratorResponse = response.content[0].text;
 

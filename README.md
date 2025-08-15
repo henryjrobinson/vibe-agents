@@ -24,17 +24,18 @@ A web application that helps elderly users share their life stories through conv
 ## Technology Stack
 
 - **Frontend**: Vanilla JavaScript, Custom CSS with CSS Custom Properties
-- **AI Backend**: Anthropic Claude 3.5 Sonnet
-- **Deployment**: Render (always-on Node service for backend) + static hosting for frontend
+- **AI Backend**: Anthropic Claude 3.5 (Haiku default for speed; Sonnet optional)
+- **Deployment**: Render (single Web Service serving both frontend and backend API)
 - **Architecture**: Server-backed with SSE streaming (Collaborator) and background tool processing (Memory Keeper)
 
 ## Current Architecture (Demo/Prototype)
 
-This repo now targets a demo-friendly architecture:
+This repo now targets a demo-friendly, single-origin architecture on Render:
 
-- **Single agent (Collaborator)** streams responses to the UI via **SSE**.
-- **Memory Keeper** runs as a **tool-like background job** that extracts structured data and publishes updates via SSE.
-- **Backend** runs on **Render** for predictable latency (no cold starts).
+- **Single Render Web Service** serves the static frontend and exposes API endpoints
+- **Collaborator** streams responses to the UI via **SSE** (`POST /chat`)
+- **Memory Keeper** runs as a **background extraction** publishing updates via SSE (`GET /events`)
+- **Backend** runs on **Render** for predictable latency (no cold starts)
 
 See detailed docs in `docs/`:
 
@@ -113,6 +114,17 @@ nvm install      # Install if version not available
 - Isolated npm dependencies
 - No interference with other projects
 - Clean environment setup/teardown
+
+### Render Deployment
+
+1. **Create a Web Service on Render** connected to this repo
+2. Render auto-detects `render.yaml` (or set Build: `npm install`, Start: `npm start`)
+3. **Environment Variables (Render Dashboard)**
+   - `ANTHROPIC_API_KEY` (required)
+   - `SESSION_SECRET` (required)
+   - Optional: `PORT=3000` (default) — server respects `process.env.PORT`
+4. **Health Check**: `/healthz`
+5. Open the service URL; the frontend and API are both served from the same origin.
 
 ### Legacy: Netlify Deployment
 

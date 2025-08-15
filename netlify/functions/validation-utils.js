@@ -19,8 +19,10 @@ const ALLOWED_ORIGINS = [
     'https://main--vibe-agents.netlify.app',
     'http://localhost:3000',
     'http://localhost:8080',
+    'http://localhost:8888', // Netlify Dev default port
     'http://127.0.0.1:3000',
     'http://127.0.0.1:8080',
+    'http://127.0.0.1:8888', // Netlify Dev default port
     'file://' // For local testing
 ];
 
@@ -34,7 +36,8 @@ const ALLOWED_MODELS = [
     'claude-3-opus-20240229',
     'claude-3-5-haiku-20241022',
     'claude-3-5-sonnet-20241022',
-    'claude-opus-4-20250514'
+    'claude-opus-4-20250514',
+    'claude-sonnet-4-20250514' // Claude 4 Sonnet model
 ];
 
 /**

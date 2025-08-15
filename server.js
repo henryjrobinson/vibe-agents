@@ -20,12 +20,16 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
+            scriptSrc: ["'self'"],
+            styleSrc: ["'self'"],
             imgSrc: ["'self'", "data:", "https:"],
+            fontSrc: ["'self'"],
             connectSrc: ["'self'", "https://api.anthropic.com"],
             objectSrc: ["'none'"],
-            baseUri: ["'self'"]
+            baseUri: ["'self'"],
+            formAction: ["'self'"],
+            frameAncestors: ["'none'"],
+            upgradeInsecureRequests: []
         }
     }
 }));
@@ -185,6 +189,18 @@ QUALITY STANDARDS:
 
 Remember: You're preserving family legacy with the same care and attention the family would want for their most precious memories.`;
 
+// Allowed model whitelist and sanitizer
+const ALLOWED_MODELS = [
+    'claude-3-5-haiku-latest',
+    'claude-3-5-sonnet-latest'
+];
+
+function sanitizeModel(requested, fallback) {
+    const fb = fallback || 'claude-3-5-haiku-latest';
+    if (!requested || typeof requested !== 'string') return fb;
+    return ALLOWED_MODELS.includes(requested) ? requested : fb;
+}
+
 // API Routes
 
 // === SSE: Stream collaborator + background memory extraction ===
@@ -281,7 +297,7 @@ app.get('/healthz', (req, res) => {
 // Collaborator agent endpoint
 app.post('/api/collaborator', async (req, res) => {
     try {
-        const { message, conversationHistory = [], model = (process.env.COLLABORATOR_MODEL || 'claude-3-5-haiku-latest') } = req.body;
+        const { message, conversationHistory = [], model } = req.body;
 
         if (!message || typeof message !== 'string') {
             return res.status(400).json({ error: 'Message is required and must be a string' });
@@ -296,8 +312,9 @@ app.post('/api/collaborator', async (req, res) => {
             }
         ];
 
+        const effectiveModel = sanitizeModel(model, process.env.COLLABORATOR_MODEL || 'claude-3-5-haiku-latest');
         const response = await anthropic.messages.create({
-            model: model,
+            model: effectiveModel,
             max_tokens: 1000,
             system: COLLABORATOR_SYSTEM_PROMPT,
             messages: messages
@@ -323,7 +340,7 @@ app.post('/api/collaborator', async (req, res) => {
 // Memory Keeper agent endpoint
 app.post('/api/memory-keeper', async (req, res) => {
     try {
-        const { message, model = (process.env.MEMORY_MODEL || 'claude-3-5-haiku-latest') } = req.body;
+        const { message, model } = req.body;
 
         console.log('=== MEMORY KEEPER DEBUG ===');
         console.log('Input message:', message);
@@ -354,8 +371,9 @@ Message: "${message}"`;
         console.log('Prompt sent to Claude:', promptContent);
         console.log('System prompt length:', MEMORY_KEEPER_SYSTEM_PROMPT.length);
 
+        const effectiveModel = sanitizeModel(model, process.env.MEMORY_MODEL || 'claude-3-5-haiku-latest');
         const response = await anthropic.messages.create({
-            model: model,
+            model: effectiveModel,
             max_tokens: 300,
             system: MEMORY_KEEPER_SYSTEM_PROMPT,
             messages: [{

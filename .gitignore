@@ -11,6 +11,9 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
+# Env backups
+.env.backup.*
+
 # Runtime data
 pids
 *.pid
@@ -132,3 +135,6 @@ MANIFEST
 venv/
 ENV/
 env/
+
+# Local Netlify folder
+.netlify
