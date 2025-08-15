@@ -38,7 +38,7 @@ app.use(helmet({
 const corsOriginsEnv = process.env.CORS_ORIGIN;
 const corsAllow = corsOriginsEnv
   ? corsOriginsEnv.split(',').map(s => s.trim()).filter(Boolean)
-  : [/^https?:\/\/localhost(?::\d+)?$/, /^https?:\/\/127\.0\.0\.1(?::\d+)?$/, /\.netlify\.app$/];
+  : [/^https?:\/\/localhost(?::\d+)?$/, /^https?:\/\/127\.0\.0\.1(?::\d+)?$/, /\.netlify\.app$/, /\.onrender\.com$/];
 
 app.use(cors({
     origin: (origin, callback) => {
