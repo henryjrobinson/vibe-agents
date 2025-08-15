@@ -126,19 +126,6 @@ nvm install      # Install if version not available
 4. **Health Check**: `/healthz`
 5. Open the service URL; the frontend and API are both served from the same origin.
 
-### Legacy: Netlify Deployment
-
-1. **Connect repository to Netlify**
-   - Fork/clone this repository
-   - Connect to Netlify dashboard
-
-2. **Set environment variables**
-   - In Netlify dashboard: Site settings → Environment variables
-   - Add `ANTHROPIC_API_KEY` with your API key
-
-3. **Deploy**
-   - Netlify will automatically deploy from your repository
-   - No build process needed - static files only
 
 ## Usage
 
@@ -230,7 +217,7 @@ const response = await fetch('https://api.anthropic.com/v1/messages', {
 ## Security Considerations
 
 - API keys are handled via environment variables
-- Content Security Policy configured in `netlify.toml`
+- Content Security Policy configured via Helmet in `server.js`
 - No sensitive data stored client-side
 - HTTPS enforced in production
 

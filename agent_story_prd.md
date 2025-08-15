@@ -93,9 +93,8 @@ Memory Keeper: {
 **Approach**: Directly reuse the existing Memorial Mosaic UI/UX design, adapting content for story collection
 
 ### Deployment Strategy
-- **Primary Platform**: Netlify (preferred for static hosting)
-- **Secondary Platform**: Render (for backend services if needed)
-- **Architecture**: Reuse mosaic's chat-based interface with agentic backend
+- **Platform**: Render (single Express service hosting frontend and API)
+- **Architecture**: Chat-based interface served by Express with SSE endpoints
 
 ### Prototype Scope
 **Phase 1 Focus**: Two-agent interaction demonstration
@@ -147,9 +146,9 @@ Memory Keeper: {
 - Add Memory Keeper processing pipeline
 
 **Deployment**:
-- Reuse mosaic's Netlify configuration
-- Environment variable management for API keys
-- HTTPS enabled by default
+- Deploy via Render using `render.yaml` or dashboard
+- Environment variables configured in Render dashboard
+- HTTPS enabled by default on Render
 
 ### Adapted User Experience Flow
 1. User lands on familiar mosaic-style interface

@@ -136,5 +136,4 @@ venv/
 ENV/
 env/
 
-# Local Netlify folder
-.netlify
+

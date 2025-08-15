@@ -57,7 +57,7 @@ This document describes the server-side tool architecture for extracting memorie
 
 ## Security and Ops
 - Helmet, CORS, and rate limiting enabled for API routes.
-- CORS allows localhost, Netlify, and Render domains.
+- CORS allows localhost and Render domains.
 - Sensitive data handling: only meaningful extractions are persisted.
 
 ## Future Work
