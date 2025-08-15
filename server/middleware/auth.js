@@ -9,9 +9,24 @@ function initializeFirebaseAdmin() {
     
     try {
         // In production, use service account key from environment
-        const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY 
-            ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY)
-            : null;
+        // Prefer Base64 variant to avoid fragile JSON escaping in env systems
+        let serviceAccount = null;
+        if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY_B64) {
+            try {
+                const decoded = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_KEY_B64, 'base64').toString('utf8');
+                serviceAccount = JSON.parse(decoded);
+                console.log('🔥 Firebase Admin: using Base64 credentials from FIREBASE_SERVICE_ACCOUNT_KEY_B64');
+            } catch (b64Err) {
+                console.error('❌ Failed to decode/parse FIREBASE_SERVICE_ACCOUNT_KEY_B64:', b64Err.message);
+            }
+        } else if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+            try {
+                serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+                console.log('🔥 Firebase Admin: using JSON credentials from FIREBASE_SERVICE_ACCOUNT_KEY');
+            } catch (jsonErr) {
+                console.error('❌ Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY JSON:', jsonErr.message);
+            }
+        }
         
         // Prefer explicit service account when provided
         if (serviceAccount) {

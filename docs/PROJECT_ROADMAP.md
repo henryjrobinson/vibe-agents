@@ -62,6 +62,16 @@
 - [ ] Fix duplicate memory extraction bug
 - fix memory extractor login issue after login it says you need to log in but there is no problem it just doesn't refresh
 
+#### Hardening (Phase 2)
+- [ ] Upgrade Node.js runtime to active LTS on Render and locally
+  - Update `.nvmrc` to Node 20.x (e.g., `20.14.0`) to replace EOL `18.19.0`
+  - Verify Render picks up `.nvmrc` and redeploy
+  - Keep `package.json -> engines.node` compatible (>=20)
+- [ ] Replace escaped JSON env for Firebase Admin with a robust solution
+  - Option A (recommended): Use Render Secret File + `GOOGLE_APPLICATION_CREDENTIALS`, and let `initializeFirebaseAdmin()` use Application Default Credentials in production
+  - Option B: Add `FIREBASE_SERVICE_ACCOUNT_KEY_B64` support; store Base64-encoded JSON and decode before `JSON.parse`
+  - Remove reliance on fragile newline-escaped JSON in `FIREBASE_SERVICE_ACCOUNT_KEY`
+
 
 ### 🚀 Phase 3: Advanced Features (PLANNED)
 **Priority: Medium** | **Timeline: 2-3 weeks**

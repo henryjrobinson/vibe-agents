@@ -13,6 +13,10 @@ const { verifyFirebaseToken, optionalAuth, ensureUserScope, initializeFirebaseAd
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust Render/Proxy headers so express-rate-limit can read client IPs correctly
+// Fixes: ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+app.set('trust proxy', 1);
+
 // Initialize Anthropic client
 const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
