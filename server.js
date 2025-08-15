@@ -6,6 +6,7 @@ const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
 const { EventEmitter } = require('events');
 require('dotenv').config();
+const { executeTool } = require('./server/tools');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -230,19 +231,15 @@ app.post('/chat', async (req, res) => {
     // Start background memory extraction (non-blocking)
     (async () => {
         try {
-            const memoryPrompt = `Extract structured memories from the following message. Respond with ONLY valid JSON matching keys: people, dates, places, relationships, events.\n\nMessage: ${JSON.stringify(text)}`;
-            const memResp = await withTimeout(anthropic.messages.create({
-                model: MEMORY_MODEL,
-                max_tokens: 300,
-                system: MEMORY_KEEPER_SYSTEM_PROMPT,
-                messages: [{ role: 'user', content: memoryPrompt }]
-            }), 20000, 'Anthropic memory extraction timeout');
-            let payload;
-            try {
-                payload = JSON.parse(memResp.content?.[0]?.text || '{}');
-            } catch (e) {
-                payload = { people: [], dates: [], places: [], relationships: [], events: [] };
-            }
+            const payload = await withTimeout(
+                executeTool('memory_extractor', {
+                    message: text,
+                    model: MEMORY_MODEL,
+                    maxTokens: 300
+                }, { anthropic }),
+                20000,
+                'Anthropic memory extraction timeout'
+            ).catch(() => ({ people: [], dates: [], places: [], relationships: [], events: [] }));
             const chan = getChannel(conversationId);
             chan.emit('memory', { messageId, ...payload });
         } catch (err) {
@@ -359,58 +356,16 @@ app.post('/api/memory-keeper', async (req, res) => {
             return res.status(400).json({ error: 'Message is required and must be a string' });
         }
 
-        const promptContent = `Extract information from: "${message}"
-
-You MUST respond with ONLY valid JSON in this exact format:
-{
-  "people": [],
-  "dates": [],
-  "places": [],
-  "relationships": [],
-  "events": []
-}
-
-Rules:
-- If someone mentions their name, add to people array: {"name": "Name", "relationship": "narrator", "details": "person telling story"}
-- If someone mentions a place, add to places array: {"location": "Place", "significance": "context", "details": "description"}
-- NO explanatory text, NO markdown, ONLY the JSON object
-
-Message: "${message}"`;
-        console.log('Prompt sent to Claude:', promptContent);
-        console.log('System prompt length:', MEMORY_KEEPER_SYSTEM_PROMPT.length);
-
         const effectiveModel = sanitizeModel(model, process.env.MEMORY_MODEL || 'claude-3-5-haiku-latest');
-        const response = await withTimeout(anthropic.messages.create({
-            model: effectiveModel,
-            max_tokens: 300,
-            system: MEMORY_KEEPER_SYSTEM_PROMPT,
-            messages: [{
-                role: 'user',
-                content: promptContent
-            }]
-        }), 20000, 'Anthropic memory keeper timeout');
-
-        console.log('Claude raw response:', response.content[0].text);
-        console.log('Response length:', response.content[0].text.length);
-
-        let extractedMemories;
-        try {
-            // Parse the JSON response from Claude
-            extractedMemories = JSON.parse(response.content[0].text);
-            console.log('Successfully parsed memories:', JSON.stringify(extractedMemories, null, 2));
-        } catch (parseError) {
-            console.error('JSON Parse Error:', parseError);
-            console.error('Raw response that failed to parse:', response.content[0].text);
-            // Fallback to empty structure if parsing fails
-            extractedMemories = {
-                people: [],
-                dates: [],
-                places: [],
-                relationships: [],
-                events: []
-            };
-            console.log('Using fallback empty structure');
-        }
+        const extractedMemories = await withTimeout(
+            executeTool('memory_extractor', {
+                message,
+                model: effectiveModel,
+                maxTokens: 300
+            }, { anthropic }),
+            20000,
+            'Anthropic memory keeper timeout'
+        ).catch(() => ({ people: [], dates: [], places: [], relationships: [], events: [] }));
 
         res.json({
             memories: extractedMemories,
