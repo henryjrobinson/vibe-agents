@@ -8,6 +8,7 @@ const { EventEmitter } = require('events');
 require('dotenv').config();
 const { executeTool } = require('./server/tools');
 const memoryStore = require('./server/storage');
+const { verifyFirebaseToken, optionalAuth, ensureUserScope, initializeFirebaseAdmin } = require('./server/middleware/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -17,18 +18,22 @@ const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-// List memories for a conversation (after middleware)
-app.get('/api/memories', (req, res) => {
+// List memories for a conversation (requires authentication)
+app.get('/api/memories', verifyFirebaseToken, ensureUserScope, (req, res) => {
     const { conversationId = 'default' } = req.query || {};
-    const list = memoryStore.listMemories(conversationId);
+    // Scope memories to the authenticated user
+    const userConversationId = `${req.userId}_${conversationId}`;
+    const list = memoryStore.listMemories(userConversationId);
     res.json({ conversationId, count: list.length, memories: list });
 });
 
-// Get a single memory by id (after middleware)
-app.get('/api/memories/:id', (req, res) => {
+// Get a single memory by id (requires authentication)
+app.get('/api/memories/:id', verifyFirebaseToken, ensureUserScope, (req, res) => {
     const { conversationId = 'default' } = req.query || {};
     const { id } = req.params;
-    const mem = memoryStore.getMemory(conversationId, id);
+    // Scope memories to the authenticated user
+    const userConversationId = `${req.userId}_${conversationId}`;
+    const mem = memoryStore.getMemory(userConversationId, id);
     if (!mem) return res.status(404).json({ error: 'Memory not found' });
     res.json(mem);
 });
@@ -39,11 +44,11 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'"],
-            styleSrc: ["'self'"],
+            scriptSrc: ["'self'", "https://www.gstatic.com"],
+            styleSrc: ["'self'", "'unsafe-hashes'"],
             imgSrc: ["'self'", "data:", "https:"],
             fontSrc: ["'self'"],
-            connectSrc: ["'self'", "https://api.anthropic.com"],
+            connectSrc: ["'self'", "https://api.anthropic.com", "https://identitytoolkit.googleapis.com", "https://securetoken.googleapis.com"],
             objectSrc: ["'none'"],
             baseUri: ["'self'"],
             formAction: ["'self'"],
@@ -53,11 +58,11 @@ app.use(helmet({
     }
 }));
 
-// CORS: use env override, else allow localhost and *.netlify.app (demo)
+// CORS: use env override, else allow localhost and *.onrender.com (demo)
 const corsOriginsEnv = process.env.CORS_ORIGIN;
 const corsAllow = corsOriginsEnv
   ? corsOriginsEnv.split(',').map(s => s.trim()).filter(Boolean)
-  : [/^https?:\/\/localhost(?::\d+)?$/, /^https?:\/\/127\.0\.0\.1(?::\d+)?$/, /\.netlify\.app$/, /\.onrender\.com$/];
+  : [/^https?:\/\/localhost(?::\d+)?$/, /^https?:\/\/127\.0\.0\.1(?::\d+)?$/, /\.onrender\.com$/];
 
 app.use(cors({
     origin: (origin, callback) => {
@@ -82,6 +87,24 @@ app.use('/api/', limiter);
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// Expose non-sensitive environment variables to the client
+// Only Firebase client config is sent to the browser
+app.get('/env.js', (req, res) => {
+    res.type('application/javascript');
+    const env = {
+        FIREBASE_API_KEY: process.env.FIREBASE_API_KEY || '',
+        FIREBASE_AUTH_DOMAIN: process.env.FIREBASE_AUTH_DOMAIN || '',
+        FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID || '',
+        FIREBASE_STORAGE_BUCKET: process.env.FIREBASE_STORAGE_BUCKET || '',
+        FIREBASE_MESSAGING_SENDER_ID: process.env.FIREBASE_MESSAGING_SENDER_ID || '',
+        FIREBASE_APP_ID: process.env.FIREBASE_APP_ID || ''
+    };
+    if (process.env.FIREBASE_MEASUREMENT_ID) {
+        env.FIREBASE_MEASUREMENT_ID = process.env.FIREBASE_MEASUREMENT_ID;
+    }
+    res.send(`window.ENV = ${JSON.stringify(env)};`);
+});
 
 // Serve static files
 app.use(express.static('.'));
@@ -128,6 +151,11 @@ CONVERSATION TECHNIQUES:
 5. **Sensory Encouragement**: Ask about sounds, smells, feelings that bring memories to life
 6. **Privacy Sensitivity**: Acknowledge when health or sensitive information comes up and explain how it will be handled
 
+STYLE CONSTRAINTS:
+- Do NOT include stage directions, bracketed actions, or asterisk-wrapped actions (e.g., *leans in*, [smiles], (gentle tone)).
+- Convey empathy and warmth through word choice and phrasing, not through meta narration.
+- Use plain text sentences. Avoid emojis unless the user uses them first.
+
 RESPONSE STRUCTURE:
 - Start with emotional connection or validation
 - Confirm/clarify key details you heard
@@ -141,6 +169,11 @@ TONE GUIDELINES:
 - Be patient with memory gaps or confusion
 - Celebrate when memories come flooding back
 - Acknowledge the importance of preserving these stories for grandchildren
+
+RESPONSE FORMAT RULES:
+- Write directly to the user in a natural, conversational voice.
+- No stage directions, sound effects, or screenplay-style cues.
+- Keep paragraphs short (1-3 sentences) to aid readability.
 
 THERAPEUTIC AWARENESS:
 - Recognize signs of fatigue or emotional overwhelm
@@ -219,6 +252,7 @@ Remember: You're preserving family legacy with the same care and attention the f
 // Allowed model whitelist and sanitizer
 const ALLOWED_MODELS = [
     'claude-3-5-haiku-latest',
+    'claude-3-5-haiku-20241022',
     'claude-3-5-sonnet-latest'
 ];
 
@@ -231,13 +265,15 @@ function sanitizeModel(requested, fallback) {
 // API Routes
 
 // === SSE: Stream collaborator + background memory extraction ===
-app.post('/chat', async (req, res) => {
+app.post('/chat', verifyFirebaseToken, ensureUserScope, async (req, res) => {
     // Headers for SSE
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
 
     const { text, conversationId = 'default', messageId = Date.now().toString() } = req.body || {};
+    // Scope conversation to authenticated user
+    const userConversationId = `${req.userId}_${conversationId}`;
     const COLLABORATOR_MODEL = process.env.COLLABORATOR_MODEL || 'claude-3-5-haiku-latest';
     const MEMORY_MODEL = process.env.MEMORY_MODEL || COLLABORATOR_MODEL;
 
@@ -258,12 +294,12 @@ app.post('/chat', async (req, res) => {
                 20000,
                 'Anthropic memory extraction timeout'
             ).catch(() => ({ people: [], dates: [], places: [], relationships: [], events: [] }));
-            const chan = getChannel(conversationId);
+            const chan = getChannel(userConversationId);
             // Persist only if non-empty
-            const saved = memoryStore.saveMemory({ conversationId, messageId, payload });
+            const saved = memoryStore.saveMemory({ conversationId: userConversationId, messageId, payload });
             chan.emit('memory', { messageId, ...payload, id: saved?.id || null });
         } catch (err) {
-            const chan = getChannel(conversationId);
+            const chan = getChannel(userConversationId);
             chan.emit('memory', { messageId, error: 'memory_extraction_failed' });
         }
     })();
@@ -272,7 +308,7 @@ app.post('/chat', async (req, res) => {
     try {
         const collabResp = await withTimeout(anthropic.messages.create({
             model: COLLABORATOR_MODEL,
-            max_tokens: 500,
+            max_tokens: 300,
             system: COLLABORATOR_SYSTEM_PROMPT,
             messages: [
                 { role: 'user', content: text }
@@ -294,13 +330,43 @@ app.post('/chat', async (req, res) => {
 });
 
 // SSE channel for memory updates
-app.get('/events', (req, res) => {
-    const { conversationId = 'default' } = req.query;
+app.get('/events', async (req, res) => {
+    const { conversationId = 'default', token } = req.query;
+    
+    // Handle token-based auth for SSE (since EventSource doesn't support custom headers)
+    let userId = null;
+    if (token) {
+        try {
+            const admin = require('firebase-admin');
+            // Ensure admin app is initialized (shared initializer)
+            const firebaseApp = initializeFirebaseAdmin();
+            if (!firebaseApp) {
+                console.error('SSE auth error: Firebase Admin not initialized');
+                return res.status(500).json({ error: 'Auth service unavailable' });
+            }
+            const decodedToken = await admin.auth(firebaseApp).verifyIdToken(token);
+            userId = decodedToken.uid;
+            if (!userId) {
+                return res.status(401).json({ error: 'Invalid token' });
+            }
+        } catch (error) {
+            console.error('SSE token verification failed:', error);
+            return res.status(401).json({ error: 'Invalid token' });
+        }
+    }
+    
+    if (!userId) {
+        return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    // Scope conversation to authenticated user
+    const userConversationId = `${userId}_${conversationId}`;
+    console.log(`📡 SSE connected for user=${userId}, conversation=${conversationId}`);
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
 
-    const chan = getChannel(conversationId);
+    const chan = getChannel(userConversationId);
     const onMemory = (data) => sseWrite(res, 'memory', data);
     chan.on('memory', onMemory);
 
@@ -319,8 +385,32 @@ app.get('/healthz', (req, res) => {
     res.status(200).json({ ok: true, ts: Date.now() });
 });
 
+// Warming endpoint to prevent cold starts
+app.get('/warm', async (req, res) => {
+    try {
+        // Quick Anthropic API test to warm the connection
+        const response = await withTimeout(anthropic.messages.create({
+            model: 'claude-3-5-haiku-latest',
+            max_tokens: 5,
+            messages: [{ role: 'user', content: 'Hi' }]
+        }), 5000, 'Warm timeout');
+        
+        res.json({ 
+            status: 'warm', 
+            timestamp: new Date().toISOString(),
+            tokens: response.usage?.output_tokens || 0
+        });
+    } catch (error) {
+        res.status(500).json({ 
+            status: 'error', 
+            message: 'Warming failed',
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
 // Collaborator agent endpoint
-app.post('/api/collaborator', async (req, res) => {
+app.post('/api/collaborator', verifyFirebaseToken, ensureUserScope, async (req, res) => {
     try {
         const { message, conversationHistory = [], model } = req.body;
 
@@ -340,7 +430,7 @@ app.post('/api/collaborator', async (req, res) => {
         const effectiveModel = sanitizeModel(model, process.env.COLLABORATOR_MODEL || 'claude-3-5-haiku-latest');
         const response = await withTimeout(anthropic.messages.create({
             model: effectiveModel,
-            max_tokens: 500,
+            max_tokens: 300,
             system: COLLABORATOR_SYSTEM_PROMPT,
             messages: messages
         }), 20000, 'Anthropic collaborator timeout');
@@ -363,9 +453,11 @@ app.post('/api/collaborator', async (req, res) => {
 });
 
 // Memory Keeper agent endpoint
-app.post('/api/memory-keeper', async (req, res) => {
+app.post('/api/memory-keeper', verifyFirebaseToken, ensureUserScope, async (req, res) => {
     try {
         const { message, model, conversationId = 'default', messageId } = req.body;
+        // Scope conversation to authenticated user
+        const userConversationId = `${req.userId}_${conversationId}`;
 
         console.log('=== MEMORY KEEPER DEBUG ===');
         console.log('Input message:', message);
@@ -388,11 +480,11 @@ app.post('/api/memory-keeper', async (req, res) => {
         ).catch(() => ({ people: [], dates: [], places: [], relationships: [], events: [] }));
 
         // Save if non-empty and return saved id
-        const saved = memoryStore.saveMemory({ conversationId, messageId, payload: extractedMemories });
+        const saved = memoryStore.saveMemory({ conversationId: userConversationId, messageId, payload: extractedMemories });
 
         // Emit SSE event so connected clients receive updates even when using REST flow
         try {
-            const chan = getChannel(conversationId);
+            const chan = getChannel(userConversationId);
             chan.emit('memory', { messageId, ...extractedMemories, id: saved?.id || null });
         } catch (e) {
             // Non-fatal
@@ -443,12 +535,43 @@ app.use((req, res) => {
     res.status(404).json({ error: 'Endpoint not found' });
 });
 
-// Start server
+// Function warming scheduler (every 10 minutes)
+function startWarmingScheduler() {
+    const warmInterval = 10 * 60 * 1000; // 10 minutes
+    setInterval(async () => {
+        try {
+            const response = await fetch(`http://localhost:${process.env.PORT || 3000}/warm`);
+            const data = await response.json();
+            console.log(`🔥 Warming ping: ${data.status}`);
+        } catch (error) {
+            console.log(`⚠️ Warming failed: ${error.message}`);
+        }
+    }, warmInterval);
+    
+    // Initial warm after 30 seconds
+    setTimeout(async () => {
+        try {
+            const response = await fetch(`http://localhost:${process.env.PORT || 3000}/warm`);
+            const data = await response.json();
+            console.log(`🔥 Initial warming: ${data.status}`);
+        } catch (error) {
+            console.log(`⚠️ Initial warming failed: ${error.message}`);
+        }
+    }, 30000);
+}
+
+// Start the server
 app.listen(PORT, () => {
     console.log(`🚀 Story Collection server running on port ${PORT}`);
     console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🤖 Anthropic API: ${process.env.ANTHROPIC_API_KEY ? '✅ Configured' : '❌ Missing'}`);
     console.log(`🌐 Access at: http://localhost:${PORT}`);
+    
+    // Start warming scheduler in production
+    if (process.env.NODE_ENV === 'production') {
+        startWarmingScheduler();
+        console.log(`🔥 Function warming enabled (10min intervals)`);
+    }
 });
 
 module.exports = app;
