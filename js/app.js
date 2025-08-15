@@ -23,14 +23,24 @@ function setupAuthSSEBinding() {
             if (user) {
                 // Immediately reflect auth state in UI while SSE connects
                 updateMemoryStatus('Connecting...');
-                await initializeSSE();
+                await initializeSSE(false);
             } else {
-                updateMemoryStatus('Redirecting to sign in...');
-                // Enforce splash-only authentication: redirect if unauthenticated on chat page
-                setTimeout(() => {
-                    try { window.location.replace('index.html'); } catch (_) { window.location.href = 'index.html'; }
-                }, 0);
+                updateMemoryStatus('Not authenticated');
+                // Note: auth-guard.js handles redirect to avoid double-redirect conflicts
             }
+        });
+
+        // Refresh SSE when Firebase ID token rotates
+        window.firebaseAuth.onIdTokenChanged(async (user) => {
+            if (!user) return; // handled by onAuthStateChanged
+            // Debounce reconnects to avoid thrash
+            if (sseReconnectTimer) { clearTimeout(sseReconnectTimer); }
+            sseReconnectTimer = setTimeout(() => {
+                if (window.firebaseAuth && window.firebaseAuth.isAuthenticated()) {
+                    updateMemoryStatus('Refreshing secure connection...');
+                    initializeSSE(true);
+                }
+            }, 250);
         });
 
         // Initial load: wait for Firebase to report auth state to avoid race-condition redirects
@@ -59,6 +69,10 @@ let sendInProgress = false;
 let conversationId = null;
 let eventSource = null;
 const seenMemoryIds = new Set();
+// SSE reconnect controls
+let sseReconnectTimer = null;
+let lastSseToken = null;
+let lastSseUrl = null;
 
 // Generate or load a persistent conversationId
 function getConversationId() {
@@ -85,7 +99,7 @@ function generateMessageId() {
 }
 
 // Initialize SSE connection for memory updates
-async function initializeSSE() {
+async function initializeSSE(forceRefresh = false) {
     const id = getConversationId();
     try {
         if (eventSource) {
@@ -99,13 +113,17 @@ async function initializeSSE() {
         let sseUrl = `/events?conversationId=${encodeURIComponent(id)}`;
         if (window.firebaseAuth && window.firebaseAuth.isAuthenticated()) {
             try {
-                // Force refresh to avoid stale tokens in private/incognito mode
-                const token = await window.firebaseAuth.getIdToken(true);
+                // Use forceRefresh when explicitly requested (e.g., token rotation)
+                const token = await window.firebaseAuth.getIdToken(!!forceRefresh);
+                lastSseToken = token;
                 sseUrl += `&token=${encodeURIComponent(token)}`;
             } catch (error) {
                 console.error('Failed to get Firebase token for SSE:', error);
             }
         }
+        // Add cache-busting param to avoid any proxy caching and disambiguate reconnects
+        sseUrl += `&cb=${Date.now()}`;
+        lastSseUrl = sseUrl;
         
         eventSource = new EventSource(sseUrl);
 
@@ -115,8 +133,9 @@ async function initializeSSE() {
         };
 
         eventSource.onerror = (err) => {
-            // EventSource auto-reconnects; just log
+            // EventSource auto-reconnects; also schedule a token-refresh reconnect to avoid stale tokens
             addLogEntry('error', 'SSE', { error: 'connection_error', details: String(err) }, false);
+            scheduleSSEReconnect('sse_onerror', 1000);
         };
 
         eventSource.addEventListener('memory', (ev) => {
@@ -154,6 +173,20 @@ async function initializeSSE() {
     } catch (e) {
         addLogEntry('error', 'SSE', { error: 'init_failed', details: String(e) }, false);
     }
+}
+
+// Debounced SSE reconnect helper
+function scheduleSSEReconnect(reason = 'unknown', delay = 300) {
+    if (sseReconnectTimer) {
+        clearTimeout(sseReconnectTimer);
+    }
+    sseReconnectTimer = setTimeout(() => {
+        if (window.firebaseAuth && window.firebaseAuth.isAuthenticated()) {
+            updateMemoryStatus('Reconnecting...');
+            initializeSSE(true);
+        }
+    }, delay);
+    addLogEntry('info', 'SSE', { action: 'schedule_reconnect', reason, delay }, true);
 }
 
 // Small helper to enforce client-side timeouts for fetch with Firebase auth
