@@ -26,10 +26,14 @@ class DatabaseMemoryStore {
             const encryptedPayload = this.db.encrypt(JSON.stringify(payload));
             const payloadHash = this.db.createHash(payload);
             
-            // Insert memory with proper user isolation
+            // Insert memory with proper user isolation and deduplication
+            // Deduplicate by (user_id, conversation_id, payload_hash)
             const result = await this.db.pool.query(`
                 INSERT INTO encrypted_memories (conversation_id, user_id, message_id, encrypted_payload, payload_hash)
                 VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (user_id, conversation_id, payload_hash)
+                DO UPDATE SET 
+                    message_id = COALESCE(encrypted_memories.message_id, EXCLUDED.message_id)
                 RETURNING id, created_at
             `, [conversationUuid, dbUserId, messageId, encryptedPayload, payloadHash]);
             
@@ -60,9 +64,9 @@ class DatabaseMemoryStore {
             // Get user's database ID
             const dbUserId = await this.db.ensureUser(userId);
             
-            // Get conversation UUID
+            // Get conversation UUID (conversations.title stores conversationId)
             const conversationResult = await this.db.pool.query(
-                'SELECT id FROM conversations WHERE user_id = $1 AND conversation_id = $2',
+                'SELECT id FROM conversations WHERE user_id = $1 AND title = $2',
                 [dbUserId, conversationId]
             );
             
@@ -73,8 +77,8 @@ class DatabaseMemoryStore {
             // Fetch memories with proper user isolation
             const result = await this.db.pool.query(`
                 SELECT id, message_id, encrypted_payload, created_at
-                FROM memories 
-                WHERE conversation_uuid = $1 AND user_id = $2
+                FROM encrypted_memories 
+                WHERE conversation_id = $1 AND user_id = $2
                 ORDER BY created_at DESC
             `, [conversationUuid, dbUserId]);
             
@@ -193,7 +197,7 @@ class DatabaseMemoryStore {
                     MIN(m.created_at) as first_memory,
                     MAX(m.created_at) as last_memory
                 FROM conversations c
-                LEFT JOIN memories m ON c.id = m.conversation_uuid
+                LEFT JOIN encrypted_memories m ON c.id = m.conversation_id
                 WHERE c.user_id = $1
             `, [dbUserId]);
             

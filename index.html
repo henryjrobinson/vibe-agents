@@ -89,7 +89,21 @@
                 </button>
 
                 <div id="forgot-password-link" class="forgot-password">
-                    <a href="#forgot-password">Forgot your password?</a>
+                    <a href="#" id="forgot-password-trigger">Forgot your password?</a>
+                </div>
+
+                <!-- Forgot Password Form (initially hidden) -->
+                <div id="forgot-password-form" class="auth-form hidden">
+                    <div class="form-group">
+                        <label for="forgot-email">Email Address</label>
+                        <input type="email" id="forgot-email" placeholder="your@email.com" />
+                    </div>
+                    <button id="forgot-submit-btn" class="auth-submit-btn">
+                        Send Reset Email
+                    </button>
+                    <div class="back-to-signin">
+                        <a href="#" id="back-to-signin">Back to sign in</a>
+                    </div>
                 </div>
             </div>
         </div>

@@ -59,6 +59,7 @@ class Database {
                 CREATE INDEX IF NOT EXISTS idx_encrypted_memories_created_at ON encrypted_memories(created_at);
                 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_created ON audit_logs(user_id, created_at);
                 CREATE INDEX IF NOT EXISTS idx_audit_logs_action_created ON audit_logs(action, created_at);
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_encrypted_memories_dedupe ON encrypted_memories(user_id, conversation_id, payload_hash);
             `);
             console.log('✅ Database schema initialized');
         } catch (error) {
