@@ -39,11 +39,12 @@ This repo now targets a demo-friendly, single-origin architecture on Render:
 
 See detailed docs in `docs/`:
 
-- `docs/prd.md`
+- `docs/PROJECT_ROADMAP.md`
 - `docs/architecture/overview.md`
 - `docs/api.md`
 - `docs/agents.md`
-- `docs/project-plan.md`
+- `docs/firebase-setup.md`
+- `docs/technical-implementation.md`
 
 ## Quick Start
 
@@ -164,13 +165,13 @@ ENABLE_ANALYTICS=false
 
 ## Development Roadmap
 
-### Phase 1 (Current)
+### Phase 1 (Completed)
 - [x] Basic UI with mosaic-inspired design
-- [x] Simulated agent interactions
-- [x] Memory extraction with keyword detection
+- [x] Empathetic Collaborator agent (Claude) integrated
+- [x] Memory Keeper tool with Anthropic extraction
+- [x] SSE streaming for collaborator tokens and memory updates
+- [x] Firebase Authentication (client + admin) with user data isolation
 - [x] Export functionality
-- [ ] **Claude API integration for Collaborator agent**
-- [ ] **Claude API integration for Memory Keeper agent**
 
 ### Phase 2 (Planned)
 - [ ] Voice input support
@@ -187,31 +188,22 @@ ENABLE_ANALYTICS=false
 
 ## API Integration
 
-### Anthropic Claude Setup
+Agents are accessed via the app server (never call Anthropic directly from the browser):
 
-The application uses Anthropic's Claude 3.5 Sonnet for both agents:
+```bash
+# Stream collaborator response (SSE)
+curl -N \
+  -H "Authorization: Bearer <FIREBASE_ID_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -X POST http://localhost:3000/chat \
+  -d '{"text":"Hi there","conversationId":"demo","messageId":"1"}'
 
-```javascript
-// Example API call structure (to be implemented)
-const response = await fetch('https://api.anthropic.com/v1/messages', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'x-api-key': process.env.ANTHROPIC_API_KEY,
-    'anthropic-version': '2023-06-01'
-  },
-  body: JSON.stringify({
-    model: 'claude-3-5-sonnet-20241022',
-    max_tokens: 1000,
-    messages: [
-      {
-        role: 'user',
-        content: userMessage
-      }
-    ],
-    system: collaboratorSystemPrompt
-  })
-});
+# Run memory extraction (REST)
+curl -s \
+  -H "Authorization: Bearer <FIREBASE_ID_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -X POST http://localhost:3000/api/memory-keeper \
+  -d '{"message":"I grew up in Chicago","conversationId":"demo","messageId":"1"}'
 ```
 
 ## Security Considerations

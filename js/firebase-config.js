@@ -6,6 +6,7 @@ import {
     createUserWithEmailAndPassword,
     signOut,
     onAuthStateChanged,
+    onIdTokenChanged,
     sendEmailVerification,
     sendPasswordResetEmail
 } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js';
@@ -27,6 +28,7 @@ const auth = getAuth(app);
 // Authentication state management
 let currentUser = null;
 let authStateCallbacks = [];
+let idTokenCallbacks = [];
 
 // Initialize authentication state listener
 onAuthStateChanged(auth, (user) => {
@@ -39,6 +41,23 @@ onAuthStateChanged(auth, (user) => {
             callback(user);
         } catch (error) {
             console.error('Auth state callback error:', error);
+        }
+    });
+});
+
+// Listen for ID token changes (refresh, rotation)
+onIdTokenChanged(auth, (user) => {
+    // Only notify when a user exists; sign-out handled by onAuthStateChanged
+    if (!user) {
+        // Still notify null to allow listeners to clean up
+        idTokenCallbacks.forEach(cb => { try { cb(null); } catch (_) {} });
+        return;
+    }
+    idTokenCallbacks.forEach(callback => {
+        try {
+            callback(user);
+        } catch (error) {
+            console.error('ID token callback error:', error);
         }
     });
 });
@@ -153,6 +172,23 @@ window.firebaseAuth = {
             const index = authStateCallbacks.indexOf(callback);
             if (index > -1) {
                 authStateCallbacks.splice(index, 1);
+            }
+        };
+    },
+
+    // Add ID token change listener (fires on token refresh)
+    onIdTokenChanged(callback) {
+        idTokenCallbacks.push(callback);
+        // Immediately invoke with current user (may be null)
+        try {
+            callback(currentUser);
+        } catch (e) {
+            console.error('ID token callback immediate invoke error:', e);
+        }
+        return () => {
+            const index = idTokenCallbacks.indexOf(callback);
+            if (index > -1) {
+                idTokenCallbacks.splice(index, 1);
             }
         };
     },

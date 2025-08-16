@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="auth-guard">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -26,13 +26,19 @@
     <!-- Import map for Firebase ESM modules -->
     <script type="importmap" src="/importmap.json"></script>
 
+    <!-- Auth guard (external) to prevent chat flash for unauthenticated users; loads as early as possible -->
+    <script src="js/auth-guard.js"></script>
+    
     <!-- Crypto utilities for secure data storage -->
-    <!-- Expose environment before config -->
+    <!-- Expose environment before config (firebase-config reads FIREBASE_CONFIG) -->
     <script src="/env.js"></script>
     <script src="js/config.js"></script>
     <script src="js/crypto-utils.js"></script>
+    
+    <!-- Initialize Firebase after env/config so it picks up FIREBASE_CONFIG -->
+    <script type="module" src="js/firebase-config.js"></script>
 </head>
-<body>
+<body hidden>
     <!-- App Header -->
     <header id="app-header" class="app-header">
         <div class="app-header-container">
@@ -192,7 +198,6 @@
 
 
     <!-- Firebase and App Scripts -->
-    <script type="module" src="js/firebase-config.js"></script>
     <script src="js/app-header.js"></script>
     <script src="js/app.js"></script>
 </body>

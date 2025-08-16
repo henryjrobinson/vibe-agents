@@ -81,12 +81,7 @@ async function verifyFirebaseToken(req, res, next) {
         const idToken = authHeader.split('Bearer ')[1];
         
         if (!firebaseApp) {
-            console.warn('⚠️ Firebase Admin not initialized, skipping token verification');
-            // In development, allow requests to proceed without authentication
-            if (process.env.NODE_ENV === 'development') {
-                req.user = { uid: 'dev-user', email: 'dev@example.com' };
-                return next();
-            }
+            console.error('❌ Firebase Admin not initialized - authentication required');
             return res.status(500).json({ 
                 error: 'Server Error', 
                 message: 'Authentication service unavailable' 

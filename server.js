@@ -7,7 +7,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { EventEmitter } = require('events');
 require('dotenv').config();
 const { executeTool } = require('./server/tools');
-const memoryStore = require('./server/storage');
+const memoryStore = require('./server/storage/database');
 const { verifyFirebaseToken, optionalAuth, ensureUserScope, initializeFirebaseAdmin } = require('./server/middleware/auth');
 
 const app = express();
@@ -23,23 +23,35 @@ const anthropic = new Anthropic({
 });
 
 // List memories for a conversation (requires authentication)
-app.get('/api/memories', verifyFirebaseToken, ensureUserScope, (req, res) => {
-    const { conversationId = 'default' } = req.query || {};
-    // Scope memories to the authenticated user
-    const userConversationId = `${req.userId}_${conversationId}`;
-    const list = memoryStore.listMemories(userConversationId);
-    res.json({ conversationId, count: list.length, memories: list });
+app.get('/api/memories', verifyFirebaseToken, ensureUserScope, async (req, res) => {
+    try {
+        const { conversationId = 'default' } = req.query || {};
+        const ipAddress = req.ip;
+        const userAgent = req.get('User-Agent');
+        
+        const memories = await memoryStore.listMemories(conversationId, req.userId, ipAddress, userAgent);
+        res.json({ conversationId, count: memories.length, memories });
+    } catch (error) {
+        console.error('Error listing memories:', error);
+        res.status(500).json({ error: 'Failed to retrieve memories' });
+    }
 });
 
 // Get a single memory by id (requires authentication)
-app.get('/api/memories/:id', verifyFirebaseToken, ensureUserScope, (req, res) => {
-    const { conversationId = 'default' } = req.query || {};
-    const { id } = req.params;
-    // Scope memories to the authenticated user
-    const userConversationId = `${req.userId}_${conversationId}`;
-    const mem = memoryStore.getMemory(userConversationId, id);
-    if (!mem) return res.status(404).json({ error: 'Memory not found' });
-    res.json(mem);
+app.get('/api/memories/:id', verifyFirebaseToken, ensureUserScope, async (req, res) => {
+    try {
+        const { conversationId = 'default' } = req.query || {};
+        const { id } = req.params;
+        const ipAddress = req.ip;
+        const userAgent = req.get('User-Agent');
+        
+        const memory = await memoryStore.getMemory(conversationId, id, req.userId, ipAddress, userAgent);
+        if (!memory) return res.status(404).json({ error: 'Memory not found' });
+        res.json(memory);
+    } catch (error) {
+        console.error('Error getting memory:', error);
+        res.status(500).json({ error: 'Failed to retrieve memory' });
+    }
 });
 
 
@@ -286,6 +298,16 @@ app.post('/chat', verifyFirebaseToken, ensureUserScope, async (req, res) => {
         return res.end();
     }
 
+    // Security: Limit message length to prevent DoS attacks
+    const MAX_MESSAGE_LENGTH = parseInt(process.env.MAX_MESSAGE_LENGTH) || 5000;
+    if (text.length > MAX_MESSAGE_LENGTH) {
+        sseWrite(res, 'error', { 
+            code: 'message_too_long', 
+            message: `Message too long. Maximum ${MAX_MESSAGE_LENGTH} characters allowed.` 
+        });
+        return res.end();
+    }
+
     // Start background memory extraction (non-blocking)
     (async () => {
         try {
@@ -300,7 +322,15 @@ app.post('/chat', verifyFirebaseToken, ensureUserScope, async (req, res) => {
             ).catch(() => ({ people: [], dates: [], places: [], relationships: [], events: [] }));
             const chan = getChannel(userConversationId);
             // Persist only if non-empty
-            const saved = memoryStore.saveMemory({ conversationId: userConversationId, messageId, payload });
+            const saved = await memoryStore.saveMemory({ 
+                conversationId, 
+                messageId, 
+                payload, 
+                userId: req.userId,
+                userEmail: req.user?.email,
+                ipAddress: req.ip,
+                userAgent: req.get('User-Agent')
+            });
             chan.emit('memory', { messageId, ...payload, id: saved?.id || null });
         } catch (err) {
             const chan = getChannel(userConversationId);
@@ -422,6 +452,15 @@ app.post('/api/collaborator', verifyFirebaseToken, ensureUserScope, async (req, 
             return res.status(400).json({ error: 'Message is required and must be a string' });
         }
 
+        // Security: Limit message length to prevent DoS attacks
+        const MAX_MESSAGE_LENGTH = parseInt(process.env.MAX_MESSAGE_LENGTH) || 5000;
+        if (message.length > MAX_MESSAGE_LENGTH) {
+            return res.status(400).json({ 
+                error: 'Message too long', 
+                message: `Maximum ${MAX_MESSAGE_LENGTH} characters allowed` 
+            });
+        }
+
         // Build conversation context
         const messages = [
             ...conversationHistory.slice(-4), // Keep last 4 messages for context (smaller prompt)
@@ -472,6 +511,15 @@ app.post('/api/memory-keeper', verifyFirebaseToken, ensureUserScope, async (req,
             return res.status(400).json({ error: 'Message is required and must be a string' });
         }
 
+        // Security: Limit message length to prevent DoS attacks
+        const MAX_MESSAGE_LENGTH = parseInt(process.env.MAX_MESSAGE_LENGTH) || 5000;
+        if (message.length > MAX_MESSAGE_LENGTH) {
+            return res.status(400).json({ 
+                error: 'Message too long', 
+                message: `Maximum ${MAX_MESSAGE_LENGTH} characters allowed` 
+            });
+        }
+
         const effectiveModel = sanitizeModel(model, process.env.MEMORY_MODEL || 'claude-3-5-haiku-latest');
         const extractedMemories = await withTimeout(
             executeTool('memory_extractor', {
@@ -484,7 +532,15 @@ app.post('/api/memory-keeper', verifyFirebaseToken, ensureUserScope, async (req,
         ).catch(() => ({ people: [], dates: [], places: [], relationships: [], events: [] }));
 
         // Save if non-empty and return saved id
-        const saved = memoryStore.saveMemory({ conversationId: userConversationId, messageId, payload: extractedMemories });
+        const saved = await memoryStore.saveMemory({ 
+            conversationId, 
+            messageId, 
+            payload: extractedMemories,
+            userId: req.userId,
+            userEmail: req.user?.email,
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent')
+        });
 
         // Emit SSE event so connected clients receive updates even when using REST flow
         try {
@@ -507,6 +563,32 @@ app.post('/api/memory-keeper', verifyFirebaseToken, ensureUserScope, async (req,
         res.status(500).json({ 
             error: 'Failed to extract memories',
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+});
+
+// Logout endpoint for token invalidation
+app.post('/api/logout', verifyFirebaseToken, (req, res) => {
+    try {
+        // Firebase tokens are stateless and automatically expire
+        // This endpoint serves as a logout notification for server-side cleanup
+        console.log(`🚪 User ${req.user.email} logged out`);
+        
+        // Here you could add token blacklisting if needed:
+        // - Add token to Redis blacklist with expiry
+        // - Clear any server-side sessions
+        // - Log security event
+        
+        res.json({ 
+            success: true,
+            message: 'Logout successful',
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('Logout error:', error);
+        res.status(500).json({ 
+            error: 'Logout failed',
+            timestamp: new Date().toISOString()
         });
     }
 });

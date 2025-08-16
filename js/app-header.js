@@ -186,23 +186,49 @@ class AppHeader {
         }
     }
 
-    handleLogout() {
+    async handleLogout() {
         console.log('👋 Logout clicked');
         
         if (confirm('Are you sure you want to sign out?')) {
-            // Clear any stored usage marker
-            localStorage.removeItem('story-collection-used');
-            
-            // Sign out from Firebase if available, then redirect
-            const redirect = () => { try { window.location.replace('index.html'); } catch (_) { window.location.href = 'index.html'; } };
             try {
-                if (window.firebaseAuth && typeof window.firebaseAuth.signOut === 'function') {
-                    window.firebaseAuth.signOut().finally(redirect);
-                } else {
-                    redirect();
+                // Get current token before signing out for server-side invalidation
+                let currentToken = null;
+                try {
+                    if (window.firebaseAuth && window.firebaseAuth.isAuthenticated()) {
+                        currentToken = await window.firebaseAuth.getIdToken();
+                    }
+                } catch (tokenError) {
+                    console.warn('Could not get token for invalidation:', tokenError);
                 }
-            } catch (_) {
-                redirect();
+
+                // Clear any stored usage marker
+                localStorage.removeItem('story-collection-used');
+
+                // Sign out from Firebase (invalidates token client-side)
+                if (window.firebaseAuth) {
+                    await window.firebaseAuth.signOut();
+                }
+                
+                // Optional: Notify server to invalidate token server-side
+                if (currentToken) {
+                    try {
+                        await fetch('/api/logout', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${currentToken}`,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+                    } catch (logoutError) {
+                        console.warn('Server logout notification failed:', logoutError);
+                    }
+                }
+                
+                window.location.href = '/';
+            } catch (error) {
+                console.error('Sign out error:', error);
+                // Force redirect even if logout fails
+                window.location.href = '/';
             }
         }
     }
