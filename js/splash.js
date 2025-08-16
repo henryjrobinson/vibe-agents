@@ -235,33 +235,75 @@ class SplashPage {
     showForgotPasswordForm() {
         console.log('🔑 Showing forgot password form');
         
-        // Hide main auth form
-        const authForm = document.querySelector('.auth-form:not(#forgot-password-form)');
+        // Hide main auth form and toggle
+        const mainAuthForm = document.querySelector('.auth-form:not(#forgot-password-form)');
         const authToggle = document.querySelector('.auth-toggle');
+        const forgotPasswordLink = document.getElementById('forgot-password-link');
         const forgotPasswordForm = document.getElementById('forgot-password-form');
         
-        if (authForm) authForm.classList.add('hidden');
-        if (authToggle) authToggle.classList.add('hidden');
-        if (forgotPasswordForm) forgotPasswordForm.classList.remove('hidden');
+        console.log('Elements found:', {
+            mainAuthForm: !!mainAuthForm,
+            authToggle: !!authToggle,
+            forgotPasswordLink: !!forgotPasswordLink,
+            forgotPasswordForm: !!forgotPasswordForm
+        });
+        
+        if (mainAuthForm) {
+            mainAuthForm.style.display = 'none';
+            console.log('Main auth form hidden');
+        }
+        if (authToggle) {
+            authToggle.style.display = 'none';
+            console.log('Auth toggle hidden');
+        }
+        if (forgotPasswordLink) {
+            forgotPasswordLink.style.display = 'none';
+            console.log('Forgot password link hidden');
+        }
+        if (forgotPasswordForm) {
+            forgotPasswordForm.style.display = 'flex';
+            forgotPasswordForm.classList.remove('hidden');
+            console.log('Forgot password form shown');
+        }
         
         // Focus email input
         const forgotEmail = document.getElementById('forgot-email');
         if (forgotEmail) {
-            setTimeout(() => forgotEmail.focus(), 100);
+            setTimeout(() => {
+                forgotEmail.focus();
+                console.log('Email input focused');
+            }, 100);
         }
     }
 
     hideForgotPasswordForm() {
         console.log('🔙 Hiding forgot password form');
         
-        // Show main auth form
-        const authForm = document.querySelector('.auth-form:not(#forgot-password-form)');
+        // Show main auth form and toggle
+        const mainAuthForm = document.querySelector('.auth-form:not(#forgot-password-form)');
         const authToggle = document.querySelector('.auth-toggle');
+        const forgotPasswordLink = document.getElementById('forgot-password-link');
         const forgotPasswordForm = document.getElementById('forgot-password-form');
         
-        if (authForm) authForm.classList.remove('hidden');
-        if (authToggle) authToggle.classList.remove('hidden');
-        if (forgotPasswordForm) forgotPasswordForm.classList.add('hidden');
+        if (mainAuthForm) {
+            mainAuthForm.style.display = 'flex';
+            mainAuthForm.classList.remove('hidden');
+            console.log('Main auth form shown');
+        }
+        if (authToggle) {
+            authToggle.style.display = 'flex';
+            authToggle.classList.remove('hidden');
+            console.log('Auth toggle shown');
+        }
+        if (forgotPasswordLink) {
+            forgotPasswordLink.style.display = 'block';
+            console.log('Forgot password link shown');
+        }
+        if (forgotPasswordForm) {
+            forgotPasswordForm.style.display = 'none';
+            forgotPasswordForm.classList.add('hidden');
+            console.log('Forgot password form hidden');
+        }
         
         // Clear any error messages
         this.clearAuthError();
