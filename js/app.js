@@ -133,9 +133,11 @@ async function initializeSSE(forceRefresh = false) {
         };
 
         eventSource.onerror = (err) => {
+            console.error('SSE connection error:', err);
+            updateMemoryStatus('Connection error - retrying...');
             // EventSource auto-reconnects; also schedule a token-refresh reconnect to avoid stale tokens
             addLogEntry('error', 'SSE', { error: 'connection_error', details: String(err) }, false);
-            scheduleSSEReconnect('sse_onerror', 1000);
+            scheduleSSEReconnect('sse_onerror', 2000); // Increase delay slightly
         };
 
         eventSource.addEventListener('memory', (ev) => {
@@ -260,18 +262,55 @@ function sanitizeErrorForUser(error) {
 }
 
 // Initialize the application
-document.addEventListener('DOMContentLoaded', async function() {
-    initializeToggles();
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('🎬 DOM loaded, initializing app...');
+    
+    // Add error handling for browser extension conflicts
+    window.addEventListener('error', (event) => {
+        // Suppress common browser extension errors that don't affect our app
+        if (event.filename && (
+            event.filename.includes('extension://') ||
+            event.filename.includes('evmAsk.js') ||
+            event.filename.includes('requestProvider.js') ||
+            event.filename.includes('content.js')
+        )) {
+            event.preventDefault();
+            return false;
+        }
+    });
+    
     initializeInput();
     initializeButtons();
     initializeModelSelector();
     initializeDebugPanel();
     setupAuthSSEBinding();
+    
+    // Wait for secure storage to be ready before loading session
+    await waitForSecureStorage();
     await loadSecureSession(); // Load encrypted session data
     
     // Auto-trigger initial conversation for new users
     autoStartConversation();
 });
+
+/**
+ * Wait for secure storage to be initialized
+ */
+async function waitForSecureStorage() {
+    let attempts = 0;
+    const maxAttempts = 50; // 5 seconds max wait
+    
+    while (!window.secureStorage && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+    }
+    
+    if (!window.secureStorage) {
+        console.warn('🚨 Secure storage not available after waiting');
+    } else {
+        console.log('🔐 Secure storage ready');
+    }
+}
 
 /**
  * Secure Session Management Functions
@@ -317,7 +356,7 @@ async function loadSecureSession() {
     try {
         const savedSession = await window.secureStorage.getSecureItem(SESSION_STORAGE_KEY);
         
-        if (savedSession && savedSession.messages && savedSession.memories) {
+        if (savedSession && (savedSession.messages || savedSession.memories)) {
             // Restore session data
             currentSession.messages = savedSession.messages || [];
             currentSession.memories = savedSession.memories || {
@@ -332,43 +371,46 @@ async function loadSecureSession() {
             console.log(`📊 Restored ${currentSession.messages.length} messages and ${Object.values(currentSession.memories).reduce((sum, arr) => sum + arr.length, 0)} memories`);
             
             // Restore UI state if there's data
-            if (currentSession.messages.length > 0) {
+            if (currentSession.messages.length > 0 || Object.values(currentSession.memories).some(arr => arr.length > 0)) {
                 restoreSessionUI();
+                return true; // Indicate session was restored
             }
         } else {
             console.log('🔐 No previous secure session found, starting fresh');
         }
     } catch (error) {
-        console.error('🚨 Failed to load secure session:', error);
-        // Continue with empty session rather than breaking the app
+        console.error('❌ Failed to load secure session:', error);
+        // Continue with fresh session if decryption fails
     }
+    return false; // Indicate no session was restored
 }
 
 /**
  * Restore UI state from loaded session data
  */
 function restoreSessionUI() {
-    try {
-        // Restore chat messages
-        const messagesContainer = document.getElementById('chat-messages');
-        if (messagesContainer && currentSession.messages.length > 0) {
-            messagesContainer.innerHTML = ''; // Clear existing messages
-            
-            currentSession.messages.forEach(message => {
-                addMessage(message.type, message.agent, message.content, {
-                    timestamp: message.timestamp,
-                    skipSave: true // Don't re-save during restoration
-                });
-            });
-        }
+    // Restore chat messages
+    const messagesContainer = document.getElementById('chat-messages');
+    if (messagesContainer && currentSession.messages.length > 0) {
+        messagesContainer.innerHTML = ''; // Clear any existing content
+        currentSession.messages.forEach(message => {
+            displayMessage(message.content, message.type, false); // false = don't save again
+        });
         
-        // Restore memory display
-        updateMemoryDisplay();
-        
-        console.log('🔐 UI state restored from secure session');
-    } catch (error) {
-        console.error('🚨 Failed to restore UI state:', error);
+        // Scroll to bottom
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
+    
+    // Restore memory display
+    updateMemoryDisplay(currentSession.memories);
+    
+    // Show continuation prompt if we have previous memories
+    const totalMemories = Object.values(currentSession.memories).reduce((sum, arr) => sum + arr.length, 0);
+    if (totalMemories > 0) {
+        showContinuationPrompt();
+    }
+    
+    console.log('🔄 UI state restored from session data');
 }
 
 /**
@@ -610,8 +652,6 @@ function updateDebugPanel(input, response, parsed) {
     console.log('Debug info:', { input, response, parsed });
 }
 
-
-
 /**
  * Send user message
  */
@@ -829,10 +869,6 @@ async function processWithCollaborator(message) {
         }, 1000);
     }
 }
-
-
-
-
 
 /**
  * Add message to chat
@@ -1435,16 +1471,43 @@ function autoStartConversation() {
     const isNewUser = !localStorage.getItem('story_session_exists');
     const hasNoMessages = currentSession.messages.length === 0;
     const justStarted = localStorage.getItem('story-collection-used') === 'true';
-    
+
     // Auto-start conversation for new users or those coming from splash
     if ((isNewUser || hasNoMessages) && justStarted) {
-        console.log('🎬 New user detected, starting conversation automatically...');
-        
-        // Small delay for better UX, then start conversation
+        console.log(' New user detected, starting conversation automatically...');
         setTimeout(() => {
             startInitialConversation();
         }, 1000);
+    } else {
+        console.log(' Returning user detected, showing continuation prompt');
+        showContinuationPrompt();
     }
+}
+
+/**
+ * Show continuation prompt for returning users
+ */
+function showContinuationPrompt() {
+    const totalMemories = Object.values(currentSession.memories).reduce((sum, arr) => sum + arr.length, 0);
+
+    // Create a continuation message
+    let continuationPrompt = "Welcome back! I can see we've been collecting your memories together. ";
+
+    if (totalMemories > 0) {
+        continuationPrompt += `So far, we've captured ${totalMemories} memories including `;
+
+        const memoryTypes = [];
+        if (currentSession.memories.people.length > 0) memoryTypes.push(`${currentSession.memories.people.length} people`);
+        if (currentSession.memories.places.length > 0) memoryTypes.push(`${currentSession.memories.places.length} places`);
+        if (currentSession.memories.events.length > 0) memoryTypes.push(`${currentSession.memories.events.length} events`);
+
+        continuationPrompt += memoryTypes.join(', ') + ". ";
+    }
+
+    continuationPrompt += "Would you like to continue sharing more stories, or would you like to elaborate on something we've already discussed?";
+
+    // Display the continuation message
+    displayMessage(continuationPrompt, 'ai', false);
 }
 
 /**
