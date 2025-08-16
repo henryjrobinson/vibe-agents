@@ -113,33 +113,6 @@ class SplashPage {
         // Modal listeners
         this.setupModalListeners();
 
-        // Forgot password link
-        const forgotPasswordTrigger = document.getElementById('forgot-password-trigger');
-        if (forgotPasswordTrigger) {
-            forgotPasswordTrigger.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.showForgotPasswordForm();
-            });
-        }
-
-        // Back to sign in link
-        const backToSignin = document.getElementById('back-to-signin');
-        if (backToSignin) {
-            backToSignin.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.hideForgotPasswordForm();
-            });
-        }
-
-        // Forgot password submit
-        const forgotSubmitBtn = document.getElementById('forgot-submit-btn');
-        if (forgotSubmitBtn) {
-            forgotSubmitBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.handleForgotPasswordSubmit();
-            });
-        }
-
         // Handle keyboard navigation
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
@@ -230,91 +203,6 @@ class SplashPage {
         }
         
         this.currentAuthMode = mode;
-    }
-
-    showForgotPasswordForm() {
-        console.log('🔑 Showing forgot password form');
-        
-        // Hide main auth form
-        const authForm = document.querySelector('.auth-form:not(#forgot-password-form)');
-        const authToggle = document.querySelector('.auth-toggle');
-        const forgotPasswordForm = document.getElementById('forgot-password-form');
-        
-        if (authForm) authForm.classList.add('hidden');
-        if (authToggle) authToggle.classList.add('hidden');
-        if (forgotPasswordForm) forgotPasswordForm.classList.remove('hidden');
-        
-        // Focus email input
-        const forgotEmail = document.getElementById('forgot-email');
-        if (forgotEmail) {
-            setTimeout(() => forgotEmail.focus(), 100);
-        }
-    }
-
-    hideForgotPasswordForm() {
-        console.log('🔙 Hiding forgot password form');
-        
-        // Show main auth form
-        const authForm = document.querySelector('.auth-form:not(#forgot-password-form)');
-        const authToggle = document.querySelector('.auth-toggle');
-        const forgotPasswordForm = document.getElementById('forgot-password-form');
-        
-        if (authForm) authForm.classList.remove('hidden');
-        if (authToggle) authToggle.classList.remove('hidden');
-        if (forgotPasswordForm) forgotPasswordForm.classList.add('hidden');
-        
-        // Clear any error messages
-        this.clearAuthError();
-    }
-
-    async handleForgotPasswordSubmit() {
-        console.log('📧 Forgot password submit clicked');
-        
-        const email = document.getElementById('forgot-email')?.value;
-        
-        // Basic validation
-        if (!email) {
-            this.showAuthError('Please enter your email address');
-            return;
-        }
-        
-        // Add loading state
-        const forgotSubmitBtn = document.getElementById('forgot-submit-btn');
-        if (forgotSubmitBtn) {
-            forgotSubmitBtn.classList.add('loading');
-            forgotSubmitBtn.textContent = 'Sending...';
-        }
-        
-        try {
-            if (!window.firebaseAuth) {
-                this.showAuthError('Authentication is not ready. Please wait a moment and try again.');
-                return;
-            }
-            
-            const result = await window.firebaseAuth.resetPassword(email);
-            
-            if (!result?.success) {
-                this.showAuthError(result?.error || 'Failed to send reset email. Please try again.');
-                return;
-            }
-            
-            console.log('✅ Password reset email sent successfully!');
-            this.showAuthSuccess('Password reset email sent! Please check your inbox and follow the instructions.');
-            
-            // Switch back to sign in form after a delay
-            setTimeout(() => {
-                this.hideForgotPasswordForm();
-            }, 3000);
-            
-        } catch (error) {
-            console.error('❌ Forgot password error:', error);
-            this.showAuthError('Failed to send reset email. Please try again.');
-        } finally {
-            if (forgotSubmitBtn) {
-                forgotSubmitBtn.classList.remove('loading');
-                forgotSubmitBtn.textContent = 'Send Reset Email';
-            }
-        }
     }
 
     async handleAuthSubmit() {
@@ -427,53 +315,6 @@ class SplashPage {
                 errorEl.style.display = 'none';
             }
         }, 5000);
-    }
-
-    showAuthSuccess(message) {
-        console.log('✅ Auth success:', message);
-        
-        // Create or update success message element
-        let successEl = document.querySelector('.auth-success');
-        if (!successEl) {
-            successEl = document.createElement('div');
-            successEl.className = 'auth-success';
-            successEl.style.cssText = `
-                color: #27ae60;
-                font-size: 0.9rem;
-                margin-top: 0.5rem;
-                text-align: center;
-                background: rgba(39, 174, 96, 0.1);
-                padding: 0.5rem;
-                border-radius: 4px;
-                border: 1px solid rgba(39, 174, 96, 0.3);
-            `;
-            
-            const authForm = document.querySelector('.auth-form:not(.hidden)');
-            if (authForm) {
-                authForm.appendChild(successEl);
-            }
-        }
-        
-        successEl.textContent = message;
-        successEl.style.display = 'block';
-        
-        // Auto-hide after 5 seconds
-        setTimeout(() => {
-            if (successEl) {
-                successEl.style.display = 'none';
-            }
-        }, 5000);
-    }
-
-    clearAuthError() {
-        const errorEl = document.querySelector('.auth-error');
-        if (errorEl) {
-            errorEl.style.display = 'none';
-        }
-        const successEl = document.querySelector('.auth-success');
-        if (successEl) {
-            successEl.style.display = 'none';
-        }
     }
 
     continueToApp() {

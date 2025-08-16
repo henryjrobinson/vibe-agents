@@ -147,14 +147,14 @@ body {
 }
 
 .auth-container {
-    background: rgba(255, 255, 255, 0.95);
+    background: rgba(0, 0, 0, 0.4);
     backdrop-filter: blur(10px);
-    border-radius: var(--border-radius);
-    padding: 2rem;
-    box-shadow: var(--shadow);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    max-width: 320px;
     width: 100%;
-    max-width: 400px;
-    margin: 0 auto;
 }
 
 .auth-toggle {
@@ -261,26 +261,9 @@ body {
 }
 
 .forgot-password a:hover {
-    color: var(--primary-dark);
+    color: var(--white);
     text-decoration: underline;
     opacity: 1;
-}
-
-.back-to-signin {
-    text-align: center;
-    margin-top: 1rem;
-}
-
-.back-to-signin a {
-    color: var(--primary-color);
-    text-decoration: none;
-    font-size: 0.9rem;
-    transition: var(--transition);
-}
-
-.back-to-signin a:hover {
-    color: var(--primary-dark);
-    text-decoration: underline;
 }
 
 /* Legacy splash header (hidden by default) */

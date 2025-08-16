@@ -6,7 +6,7 @@
 }
 
 :root {
-    --primary-gradient: linear-gradient(to left, #181818, #BA8B02);
+    --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     --header-gradient: linear-gradient(135deg, #2c3e50, #34495e);
     --ai-message-gradient: linear-gradient(135deg, #3498db, #2980b9);
     --ai-avatar-gradient: linear-gradient(135deg, #27ae60, #229954);
