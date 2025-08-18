@@ -8,6 +8,8 @@ const { EventEmitter } = require('events');
 require('dotenv').config();
 const { executeTool } = require('./server/tools');
 const memoryStore = require('./server/storage/database');
+const db = require('./server/database');
+const ragService = require('./server/tools/ragService');
 const { verifyFirebaseToken, optionalAuth, ensureUserScope, initializeFirebaseAdmin } = require('./server/middleware/auth');
 
 const app = express();
@@ -120,6 +122,32 @@ app.get('/env.js', (req, res) => {
         env.FIREBASE_MEASUREMENT_ID = process.env.FIREBASE_MEASUREMENT_ID;
     }
     res.send(`window.ENV = ${JSON.stringify(env)};`);
+});
+
+// === User Preferences API ===
+// Get a specific preference by key
+app.get('/api/user/preferences/:key', verifyFirebaseToken, ensureUserScope, async (req, res) => {
+    try {
+        const { key } = req.params;
+        const value = await db.getUserPreference(req.user.uid, key);
+        res.json({ key, value });
+    } catch (error) {
+        console.error('Error getting user preference:', error);
+        res.status(500).json({ error: 'Failed to get user preference' });
+    }
+});
+
+// Set/Update a specific preference by key
+app.put('/api/user/preferences/:key', verifyFirebaseToken, ensureUserScope, async (req, res) => {
+    try {
+        const { key } = req.params;
+        const value = req.body?.value;
+        await db.setUserPreference(req.user.uid, req.user.email, key, value);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error setting user preference:', error);
+        res.status(500).json({ error: 'Failed to set user preference' });
+    }
 });
 
 // Serve static files
@@ -593,12 +621,107 @@ app.post('/api/logout', verifyFirebaseToken, (req, res) => {
     }
 });
 
+// === RAG API ENDPOINTS ===
+
+// Process memories into stories
+app.post('/api/stories/process', verifyFirebaseToken, ensureUserScope, async (req, res) => {
+    try {
+        const { conversationId } = req.body;
+        const result = await ragService.processMemoriesIntoStories(req.userId, conversationId);
+        res.json(result);
+    } catch (error) {
+        console.error('Error processing memories into stories:', error);
+        res.status(500).json({ 
+            error: 'Failed to process memories into stories',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+});
+
+// Search stories using semantic search
+app.post('/api/stories/search', verifyFirebaseToken, ensureUserScope, async (req, res) => {
+    try {
+        const { query, limit = 10, threshold = 0.7, people = [], places = [], events = [] } = req.body;
+        
+        if (!query || typeof query !== 'string') {
+            return res.status(400).json({ error: 'Query is required and must be a string' });
+        }
+
+        const options = { limit, threshold, people, places, events };
+        const result = await ragService.searchStories(req.userId, query, options);
+        res.json(result);
+    } catch (error) {
+        console.error('Error searching stories:', error);
+        res.status(500).json({ 
+            error: 'Failed to search stories',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+});
+
+// Get relevant stories for agent context
+app.post('/api/stories/relevant', verifyFirebaseToken, ensureUserScope, async (req, res) => {
+    try {
+        const { context, maxStories = 5 } = req.body;
+        
+        if (!context || typeof context !== 'string') {
+            return res.status(400).json({ error: 'Context is required and must be a string' });
+        }
+
+        const result = await ragService.getRelevantStories(req.userId, context, maxStories);
+        res.json(result);
+    } catch (error) {
+        console.error('Error getting relevant stories:', error);
+        res.status(500).json({ 
+            error: 'Failed to get relevant stories',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+});
+
+// Get user stories with pagination
+app.get('/api/stories', verifyFirebaseToken, ensureUserScope, async (req, res) => {
+    try {
+        const { limit = 20, offset = 0, sortBy = 'created_at', sortOrder = 'DESC' } = req.query;
+        const options = { 
+            limit: parseInt(limit), 
+            offset: parseInt(offset), 
+            sortBy, 
+            sortOrder 
+        };
+        
+        const result = await ragService.getUserStories(req.userId, options);
+        res.json(result);
+    } catch (error) {
+        console.error('Error getting user stories:', error);
+        res.status(500).json({ 
+            error: 'Failed to get user stories',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+});
+
+// Get story statistics
+app.get('/api/stories/stats', verifyFirebaseToken, ensureUserScope, async (req, res) => {
+    try {
+        const result = await ragService.getStoryStats(req.userId);
+        res.json(result);
+    } catch (error) {
+        console.error('Error getting story stats:', error);
+        res.status(500).json({ 
+            error: 'Failed to get story statistics',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
     res.json({ 
         status: 'healthy', 
         timestamp: new Date().toISOString(),
-        anthropicConfigured: !!process.env.ANTHROPIC_API_KEY
+        anthropicConfigured: !!process.env.ANTHROPIC_API_KEY,
+        openaiConfigured: !!process.env.OPENAI_API_KEY
     });
 });
 
@@ -646,18 +769,20 @@ function startWarmingScheduler() {
     }, 30000);
 }
 
-// Start the server
-app.listen(PORT, () => {
-    console.log(`🚀 Story Collection server running on port ${PORT}`);
-    console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`🤖 Anthropic API: ${process.env.ANTHROPIC_API_KEY ? '✅ Configured' : '❌ Missing'}`);
-    console.log(`🌐 Access at: http://localhost:${PORT}`);
-    
-    // Start warming scheduler in production
-    if (process.env.NODE_ENV === 'production') {
-        startWarmingScheduler();
-        console.log(`🔥 Function warming enabled (10min intervals)`);
-    }
-});
+// Start the server only when executed directly, not when imported by tests
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`🚀 Story Collection server running on port ${PORT}`);
+        console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
+        console.log(`🤖 Anthropic API: ${process.env.ANTHROPIC_API_KEY ? '✅ Configured' : '❌ Missing'}`);
+        console.log(`🌐 Access at: http://localhost:${PORT}`);
+        
+        // Start warming scheduler in production
+        if (process.env.NODE_ENV === 'production') {
+            startWarmingScheduler();
+            console.log(`🔥 Function warming enabled (10min intervals)`);
+        }
+    });
+}
 
 module.exports = app;

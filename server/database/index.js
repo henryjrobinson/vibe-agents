@@ -23,6 +23,9 @@ class Database {
 
     async initializeSchema() {
         try {
+            // Enable pgvector extension for embeddings
+            await this.pool.query(`CREATE EXTENSION IF NOT EXISTS vector;`);
+
             // Add missing columns to existing users table for Firebase integration
             await this.pool.query(`
                 ALTER TABLE users 
@@ -51,6 +54,31 @@ class Database {
                     user_agent TEXT,
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
                 );
+
+                CREATE TABLE IF NOT EXISTS user_preferences (
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    key VARCHAR(100) NOT NULL,
+                    value JSONB,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    PRIMARY KEY (user_id, key)
+                );
+
+                CREATE TABLE IF NOT EXISTS stories (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    title VARCHAR(255) NOT NULL,
+                    content TEXT NOT NULL,
+                    summary TEXT,
+                    embedding vector(1536),
+                    people TEXT[],
+                    places TEXT[],
+                    dates TEXT[],
+                    events TEXT[],
+                    source_memory_ids INTEGER[],
+                    conversation_ids INTEGER[],
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                );
             `);
 
             // Create indexes
@@ -59,8 +87,15 @@ class Database {
                 CREATE INDEX IF NOT EXISTS idx_encrypted_memories_created_at ON encrypted_memories(created_at);
                 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_created ON audit_logs(user_id, created_at);
                 CREATE INDEX IF NOT EXISTS idx_audit_logs_action_created ON audit_logs(action, created_at);
+                CREATE INDEX IF NOT EXISTS idx_user_preferences_user ON user_preferences(user_id);
+                CREATE INDEX IF NOT EXISTS idx_stories_user_id ON stories(user_id);
+                CREATE INDEX IF NOT EXISTS idx_stories_created_at ON stories(created_at);
+                CREATE INDEX IF NOT EXISTS idx_stories_embedding ON stories USING ivfflat (embedding vector_cosine_ops);
+                CREATE INDEX IF NOT EXISTS idx_stories_people ON stories USING GIN (people);
+                CREATE INDEX IF NOT EXISTS idx_stories_places ON stories USING GIN (places);
+                CREATE INDEX IF NOT EXISTS idx_stories_events ON stories USING GIN (events);
             `);
-            console.log('✅ Database schema initialized');
+            console.log('✅ Database schema initialized with RAG support');
         } catch (error) {
             console.error('❌ Database schema initialization failed:', error);
         }
@@ -166,6 +201,40 @@ class Database {
             return insertResult.rows[0].id;
         } catch (error) {
             console.error('Error ensuring conversation:', error);
+            throw error;
+        }
+    }
+
+    // User preferences
+    async setUserPreference(firebaseUid, email, key, value) {
+        try {
+            const dbUserId = await this.ensureUser(firebaseUid, email);
+            await this.pool.query(
+                `INSERT INTO user_preferences (user_id, key, value, updated_at)
+                 VALUES ($1, $2, $3, NOW())
+                 ON CONFLICT (user_id, key)
+                 DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+                [dbUserId, key, value]
+            );
+            await this.logAction(dbUserId, 'UPSERT', 'user_preference', null, null, null);
+            return true;
+        } catch (error) {
+            console.error('Error setting user preference:', error);
+            throw error;
+        }
+    }
+
+    async getUserPreference(firebaseUid, key) {
+        try {
+            const dbUserId = await this.ensureUser(firebaseUid);
+            const result = await this.pool.query(
+                'SELECT value FROM user_preferences WHERE user_id = $1 AND key = $2',
+                [dbUserId, key]
+            );
+            if (result.rows.length === 0) return null;
+            return result.rows[0].value;
+        } catch (error) {
+            console.error('Error getting user preference:', error);
             throw error;
         }
     }

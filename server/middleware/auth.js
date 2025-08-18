@@ -69,6 +69,16 @@ function initializeFirebaseAdmin() {
 // Middleware to verify Firebase ID tokens
 async function verifyFirebaseToken(req, res, next) {
     try {
+        // Test bypass: allow tests to set a fake user without real Firebase
+        if (process.env.TEST_BYPASS_AUTH === '1') {
+            req.user = {
+                uid: process.env.TEST_BYPASS_UID || 'test-uid',
+                email: process.env.TEST_BYPASS_EMAIL || 'test@example.com',
+                emailVerified: true
+            };
+            return next();
+        }
+
         const authHeader = req.headers.authorization;
         
         if (!authHeader || !authHeader.startsWith('Bearer ')) {

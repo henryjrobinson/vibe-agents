@@ -484,6 +484,15 @@ class AuthUI {
 
         // Enable protected features
         this.enableProtectedFeatures();
+
+        // Show post-login onboarding, if available
+        try {
+            if (typeof window.showPostLoginOnboarding === 'function') {
+                window.showPostLoginOnboarding(user);
+            }
+        } catch (_) {
+            // no-op
+        }
     }
 
     showUnauthenticatedState() {
