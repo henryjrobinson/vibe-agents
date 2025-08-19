@@ -159,10 +159,12 @@ app.get('/env.js', (req, res) => {
 app.get('/api/user/preferences/:key', verifyFirebaseToken, ensureUserScope, async (req, res) => {
     try {
         const { key } = req.params;
+        console.log(`🔍 Getting preference: key=${key}, uid=${req.user.uid}, email=${req.user.email}`);
         const value = await db.getUserPreference(req.user.uid, req.user.email, key);
+        console.log(`🔍 Retrieved preference: ${key} = ${value}`);
         res.json({ key, value });
     } catch (error) {
-        console.error('Error getting user preference:', error);
+        console.error('❌ Error getting user preference:', error);
         res.status(500).json({ error: 'Failed to get user preference' });
     }
 });
@@ -172,10 +174,12 @@ app.put('/api/user/preferences/:key', verifyFirebaseToken, ensureUserScope, asyn
     try {
         const { key } = req.params;
         const value = req.body?.value;
+        console.log(`💾 Setting preference: key=${key}, value=${value}, uid=${req.user.uid}, email=${req.user.email}`);
         await db.setUserPreference(req.user.uid, req.user.email, key, value);
+        console.log(`✅ Successfully set preference: ${key}`);
         res.json({ success: true });
     } catch (error) {
-        console.error('Error setting user preference:', error);
+        console.error('❌ Error setting user preference:', error);
         res.status(500).json({ error: 'Failed to set user preference' });
     }
 });

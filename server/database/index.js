@@ -227,7 +227,9 @@ class Database {
     // User preferences
     async setUserPreference(firebaseUid, email, key, value) {
         try {
+            console.log(`🔧 DB setUserPreference: uid=${firebaseUid}, email=${email}, key=${key}, value=${value}`);
             const dbUserId = await this.ensureUser(firebaseUid, email);
+            console.log(`🔧 DB ensureUser returned: ${dbUserId}`);
             await this.pool.query(
                 `INSERT INTO user_preferences (user_id, key, value, updated_at)
                  VALUES ($1, $2, $3, NOW())
@@ -235,25 +237,31 @@ class Database {
                  DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
                 [dbUserId, key, value]
             );
+            console.log(`🔧 DB preference upsert completed for user ${dbUserId}`);
             await this.logAction(dbUserId, 'UPSERT', 'user_preference', null, null, null);
             return true;
         } catch (error) {
-            console.error('Error setting user preference:', error);
+            console.error('❌ DB Error setting user preference:', error);
             throw error;
         }
     }
 
     async getUserPreference(firebaseUid, email, key) {
         try {
+            console.log(`🔧 DB getUserPreference: uid=${firebaseUid}, email=${email}, key=${key}`);
             const dbUserId = await this.ensureUser(firebaseUid, email);
+            console.log(`🔧 DB ensureUser returned: ${dbUserId}`);
             const result = await this.pool.query(
                 'SELECT value FROM user_preferences WHERE user_id = $1 AND key = $2',
                 [dbUserId, key]
             );
+            console.log(`🔧 DB query result: ${result.rows.length} rows`);
             if (result.rows.length === 0) return null;
-            return result.rows[0].value;
+            const value = result.rows[0].value;
+            console.log(`🔧 DB returning value: ${value}`);
+            return value;
         } catch (error) {
-            console.error('Error getting user preference:', error);
+            console.error('❌ DB Error getting user preference:', error);
             throw error;
         }
     }
