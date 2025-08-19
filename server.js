@@ -746,12 +746,25 @@ app.get('/api/stories/stats', verifyFirebaseToken, ensureUserScope, async (req, 
 });
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
+    const dbPing = typeof db.ping === 'function' ? await db.ping() : { ok: undefined, configured: !!process.env.DATABASE_URL };
+    const encKey = process.env.ENCRYPTION_KEY || '';
+    const encValid = !!encKey && encKey.length === 64;
     res.json({ 
         status: 'healthy', 
         timestamp: new Date().toISOString(),
         anthropicConfigured: !!process.env.ANTHROPIC_API_KEY,
-        openaiConfigured: !!process.env.OPENAI_API_KEY
+        openaiConfigured: !!process.env.OPENAI_API_KEY,
+        database: {
+            configured: dbPing.configured,
+            ok: dbPing.ok,
+            error: dbPing.error
+        },
+        encryption: {
+            configured: !!encKey,
+            length: encKey.length,
+            validFormat: encValid
+        }
     });
 });
 

@@ -4,6 +4,11 @@ const crypto = require('crypto');
 
 class Database {
     constructor() {
+        this.dbConfigured = !!process.env.DATABASE_URL;
+        if (!this.dbConfigured) {
+            console.error('❌ DATABASE_URL is not set. The database is not configured.');
+        }
+
         this.pool = new Pool({
             connectionString: process.env.DATABASE_URL,
             ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
@@ -22,6 +27,10 @@ class Database {
     }
 
     async initializeSchema() {
+        if (!this.dbConfigured) {
+            console.warn('⚠️ Skipping schema initialization because DATABASE_URL is not configured.');
+            return;
+        }
         try {
             // Enable pgvector extension for embeddings
             await this.pool.query(`CREATE EXTENSION IF NOT EXISTS vector;`);
@@ -98,6 +107,16 @@ class Database {
             console.log('✅ Database schema initialized with RAG support');
         } catch (error) {
             console.error('❌ Database schema initialization failed:', error);
+        }
+    }
+
+    async ping() {
+        if (!this.dbConfigured) return { ok: false, configured: false };
+        try {
+            await this.pool.query('SELECT 1');
+            return { ok: true, configured: true };
+        } catch (e) {
+            return { ok: false, configured: true, error: e?.message };
         }
     }
 
