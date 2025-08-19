@@ -190,9 +190,14 @@ app.use(express.static('.'));
 // In-memory pub/sub for SSE events (demo only)
 // Map<conversationId, EventEmitter>
 const channels = new Map();
+// Track active connections per user to prevent duplicates
+const activeConnections = new Map(); // userId -> Set<connectionId>
+
 function getChannel(conversationId) {
     if (!channels.has(conversationId)) {
-        channels.set(conversationId, new EventEmitter());
+        const emitter = new EventEmitter();
+        emitter.setMaxListeners(50); // Increase limit to prevent warnings during rapid reconnects
+        channels.set(conversationId, emitter);
     }
     return channels.get(conversationId);
 }
@@ -425,7 +430,7 @@ app.post('/chat', verifyFirebaseToken, ensureUserScope, async (req, res) => {
     }
 });
 
-// SSE channel for memory updates
+// SSE channel for memory updates with connection deduplication
 app.get('/events', async (req, res) => {
     const { conversationId = 'default', token } = req.query;
     
@@ -455,9 +460,25 @@ app.get('/events', async (req, res) => {
         return res.status(401).json({ error: 'Authentication required' });
     }
     
+    // Generate unique connection ID for this SSE connection
+    const connectionId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    
+    // Track active connections per user for monitoring
+    if (!activeConnections.has(userId)) {
+        activeConnections.set(userId, new Set());
+    }
+    const userConnections = activeConnections.get(userId);
+    
+    // Log if user has many connections (potential issue)
+    if (userConnections.size > 5) {
+        console.warn(`⚠️ User ${userId} has ${userConnections.size} active SSE connections - potential connection leak`);
+    }
+    
+    userConnections.add(connectionId);
+    
     // Scope conversation to authenticated user
     const userConversationId = `${userId}_${conversationId}`;
-    console.log(`📡 SSE connected for user=${userId}, conversation=${conversationId}`);
+    console.log(`📡 SSE connected for user=${userId}, conversation=${conversationId}, connection=${connectionId} (total: ${userConnections.size})`);
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
@@ -467,13 +488,29 @@ app.get('/events', async (req, res) => {
     chan.on('memory', onMemory);
 
     // Heartbeat to keep connection alive
-    const hb = setInterval(() => res.write(': heartbeat\n\n'), 15000);
+    const hb = setInterval(() => {
+        try {
+            res.write(': heartbeat\n\n');
+        } catch (e) {
+            // Connection closed, cleanup will happen in close handler
+            clearInterval(hb);
+        }
+    }, 15000);
 
-    req.on('close', () => {
+    // Cleanup on connection close
+    const cleanup = () => {
         clearInterval(hb);
         chan.off('memory', onMemory);
-        res.end();
-    });
+        userConnections.delete(connectionId);
+        if (userConnections.size === 0) {
+            activeConnections.delete(userId);
+        }
+        console.log(`📡 SSE disconnected for user=${userId}, connection=${connectionId} (remaining: ${userConnections.size})`);
+        try { res.end(); } catch (_) {}
+    };
+
+    req.on('close', cleanup);
+    req.on('error', cleanup);
 });
 
 // Lightweight healthcheck for Render

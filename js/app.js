@@ -249,72 +249,94 @@ async function hydratePersistedMemories() {
 }
 
 
-// Bind SSE lifecycle to Firebase auth state changes
+// Consolidated auth and SSE management to prevent race conditions
 function setupAuthSSEBinding() {
+    let lastAuthStateChange = 0;
+    let authStateChangeTimer = null;
+    
     const bind = () => {
         if (!window.firebaseAuth) return;
-        // React to future auth changes
+        
+        // Consolidated auth state handler - only handles actual login/logout
         window.firebaseAuth.onAuthStateChanged(async (user) => {
-            // If we're in controlled bootstrap, skip handler work
-            if (bootstrapInProgress) return;
-            if (eventSource) {
-                try { eventSource.close(); } catch (_) {}
-                eventSource = null;
+            const now = Date.now();
+            console.log(`Auth state change: user=${!!user}, bootstrap=${bootstrapInProgress}`);
+            
+            // Rate limit auth state changes to prevent rapid fire during bootstrap
+            if (now - lastAuthStateChange < 1000) {
+                console.log('Auth state change rate limited');
+                return;
             }
-            if (user) {
-                // Immediately reflect auth state in UI while SSE connects
-                updateMemoryStatus('Connecting...');
-                await initializeSSE(false);
-                // After SSE is up, hydrate persisted memories once per load
-                try {
-                    if (!memoryHydrated) {
-                        await hydratePersistedMemories();
+            lastAuthStateChange = now;
+            
+            // During bootstrap, let bootstrap handle SSE initialization
+            if (bootstrapInProgress) {
+                console.log('Auth state change during bootstrap - letting bootstrap handle SSE');
+                return;
+            }
+            
+            // Debounce rapid auth state changes
+            if (authStateChangeTimer) {
+                clearTimeout(authStateChangeTimer);
+            }
+            
+            authStateChangeTimer = setTimeout(async () => {
+                if (user) {
+                    console.log('User authenticated - establishing SSE connection');
+                    await manageSSEConnection('auth_login', false);
+                    
+                    // Handle post-auth hydration only if not done during bootstrap
+                    try {
+                        if (!memoryHydrated) {
+                            await hydratePersistedMemories();
+                        }
+                        // Fetch durable narrator name preference
+                        const name = await getUserPreference('narrator_name');
+                        if (typeof name === 'string' && name.trim()) {
+                            currentUserName = name.trim();
+                            updateNarratorPill(currentUserName);
+                        }
+                    } catch (e) {
+                        console.warn('Post-auth hydration error:', e);
                     }
-                    // Fetch durable narrator name preference
-                    const name = await getUserPreference('narrator_name');
-                    if (typeof name === 'string' && name.trim()) {
-                        currentUserName = name.trim();
-                        updateNarratorPill(currentUserName);
+                } else {
+                    console.log('User logged out - closing SSE connection');
+                    sseConnectionState = 'disconnected';
+                    if (eventSource) {
+                        try { eventSource.close(); } catch (_) {}
+                        eventSource = null;
                     }
-                } catch (e) {
-                    console.warn('Hydration error:', e);
+                    updateMemoryStatus('Not authenticated');
                 }
-            } else {
-                updateMemoryStatus('Not authenticated');
-                // Note: auth-guard.js handles redirect to avoid double-redirect conflicts
-            }
+            }, 500); // 500ms debounce
         });
 
-        // Refresh SSE when Firebase ID token rotates
+        // Token refresh handler - only reconnect if connection is unhealthy
         window.firebaseAuth.onIdTokenChanged(async (user) => {
             if (!user) return; // handled by onAuthStateChanged
-            // Debounce reconnects to avoid thrash
-            if (sseReconnectTimer) { clearTimeout(sseReconnectTimer); }
-            sseReconnectTimer = setTimeout(() => {
-                if (window.firebaseAuth && window.firebaseAuth.isAuthenticated()) {
-                    updateMemoryStatus('Refreshing secure connection...');
-                    initializeSSE(true);
-                }
-            }, 250);
+            
+            // Skip during bootstrap - bootstrap will handle initial connection
+            if (bootstrapInProgress) {
+                console.log('Token refresh during bootstrap - skipping');
+                return;
+            }
+            
+            console.log(`Token refresh: connectionState=${sseConnectionState}`);
+            
+            // Only reconnect if connection is broken or this is a forced refresh
+            if (sseConnectionState === 'error' || eventSource?.readyState !== EventSource.OPEN) {
+                console.log('Token refresh triggering reconnection due to unhealthy connection');
+                if (sseReconnectTimer) clearTimeout(sseReconnectTimer);
+                sseReconnectTimer = setTimeout(() => {
+                    manageSSEConnection('token_refresh', true);
+                }, 250);
+            } else {
+                console.log('Token refresh skipped - connection is healthy');
+            }
         });
 
-        // Initial load: wait for Firebase to report auth state to avoid race-condition redirects
+        // Initial status
         updateMemoryStatus('Checking sign-in...');
-
-        // Also hydrate durable narrator name once authenticated
-        const fetchName = async () => {
-            try {
-                const name = await getUserPreference('narrator_name');
-                if (typeof name === 'string' && name.trim()) {
-                    currentUserName = name.trim();
-                }
-            } catch (_) { /* ignore */ }
-        };
-        if (window.firebaseAuth?.isAuthenticated()) {
-            fetchName();
-        } else {
-            window.firebaseAuth?.onAuthStateChanged((u) => { if (u) fetchName(); });
-        }
     };
 
     if (window.firebaseAuth) {
@@ -361,7 +383,7 @@ async function bootstrapApp() {
         updateNarratorPill(currentUserName);
 
         // 4) Initialize SSE and hydrate persisted memories
-        await initializeSSE(true);
+        await manageSSEConnection('bootstrap', true);
         try {
             if (!memoryHydrated) await hydratePersistedMemories();
         } catch (e) { console.warn('Bootstrap hydration error:', e); }
@@ -435,6 +457,12 @@ let memoryPrimerInjected = false;
 let currentUserName = null;
 // Bootstrap guard to avoid double init
 let bootstrapInProgress = false;
+// SSE connection state tracking with rate limiting
+let sseConnectionState = 'disconnected'; // 'disconnected', 'connecting', 'connected', 'error'
+let lastSSEConnectionAttempt = 0;
+let sseConnectionAttempts = 0;
+const SSE_RATE_LIMIT_MS = 5000; // Don't attempt connections more than once per 5 seconds
+const MAX_SSE_ATTEMPTS_PER_MINUTE = 10;
 // New vs Returning flag (computed during bootstrap)
 let isNewUserFlag = null;
 
@@ -508,43 +536,95 @@ function generateMessageId() {
     return `m_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-// Initialize SSE connection for memory updates
-async function initializeSSE(forceRefresh = false) {
+// Centralized SSE connection manager with state tracking and rate limiting
+async function manageSSEConnection(reason = 'unknown', forceRefresh = false) {
+    const now = Date.now();
+    
+    // Rate limiting: prevent connections more than once per 5 seconds
+    if (!forceRefresh && reason !== 'bootstrap' && now - lastSSEConnectionAttempt < SSE_RATE_LIMIT_MS) {
+        console.log(`SSE connection rate limited: ${reason}, last attempt ${now - lastSSEConnectionAttempt}ms ago`);
+        return;
+    }
+    
+    // Track connection attempts for additional protection
+    if (reason !== 'bootstrap') {
+        sseConnectionAttempts++;
+        // Reset attempt counter every minute
+        if (now - lastSSEConnectionAttempt > 60000) {
+            sseConnectionAttempts = 1;
+        }
+        if (sseConnectionAttempts > MAX_SSE_ATTEMPTS_PER_MINUTE) {
+            console.error(`SSE connection attempts exceeded limit: ${sseConnectionAttempts} attempts in past minute`);
+            return;
+        }
+    }
+    
+    lastSSEConnectionAttempt = now;
+    
+    // Prevent multiple simultaneous connection attempts
+    if (sseConnectionState === 'connecting') {
+        console.log('SSE connection already in progress, skipping:', reason);
+        return;
+    }
+    
+    // Skip reconnection during bootstrap unless explicitly required
+    if (bootstrapInProgress && reason !== 'bootstrap' && reason !== 'explicit') {
+        console.log('Skipping SSE connection during bootstrap:', reason);
+        return;
+    }
+    
+    // If we have a healthy connection and this is just a token refresh, skip
+    if (!forceRefresh && eventSource?.readyState === EventSource.OPEN && reason === 'token_refresh') {
+        console.log('SSE connection healthy, skipping token refresh reconnection');
+        return;
+    }
+    
     const id = getConversationId();
+    console.log(`Managing SSE connection: reason=${reason}, state=${sseConnectionState}`);
+    
     try {
+        sseConnectionState = 'connecting';
+        
+        // Close existing connection cleanly
         if (eventSource) {
-            try { eventSource.close(); } catch (_) {}
+            try { 
+                eventSource.close(); 
+                console.log('Closed existing SSE connection');
+            } catch (_) {}
             eventSource = null;
         }
         
         // Build SSE URL with auth token if available
-        // Indicate connection attempt before token fetch/network roundtrip
         updateMemoryStatus('Connecting...');
         let sseUrl = `/events?conversationId=${encodeURIComponent(id)}`;
         if (window.firebaseAuth && window.firebaseAuth.isAuthenticated()) {
             try {
-                // Use forceRefresh when explicitly requested (e.g., token rotation)
                 const token = await window.firebaseAuth.getIdToken(!!forceRefresh);
                 lastSseToken = token;
                 sseUrl += `&token=${encodeURIComponent(token)}`;
             } catch (error) {
                 console.error('Failed to get Firebase token for SSE:', error);
+                sseConnectionState = 'error';
+                return;
             }
         }
-        // Add cache-busting param to avoid any proxy caching and disambiguate reconnects
+        // Add cache-busting param to avoid any proxy caching
         sseUrl += `&cb=${Date.now()}`;
         lastSseUrl = sseUrl;
         
         eventSource = new EventSource(sseUrl);
 
         eventSource.onopen = () => {
-            sseReconnectAttempts = 0; // Reset on successful connection
+            sseConnectionState = 'connected';
+            sseReconnectAttempts = 0;
             updateMemoryStatus('Ready');
-            addLogEntry('info', 'SSE', { status: 'open', conversationId: id }, false);
+            addLogEntry('info', 'SSE', { status: 'open', conversationId: id, reason }, false);
+            console.log('SSE connection established:', reason);
         };
 
         eventSource.onerror = (err) => {
             console.error('SSE connection error:', err);
+            sseConnectionState = 'error';
             sseReconnectAttempts++;
             if (sseReconnectAttempts >= sseMaxReconnectAttempts) {
                 updateMemoryStatus('Connection failed - stopped retrying');
@@ -605,8 +685,14 @@ async function initializeSSE(forceRefresh = false) {
             }
         });
     } catch (e) {
+        sseConnectionState = 'error';
         addLogEntry('error', 'SSE', { error: 'init_failed', details: String(e) }, false);
     }
+}
+
+// Legacy wrapper for backward compatibility
+async function initializeSSE(forceRefresh = false) {
+    await manageSSEConnection('explicit', forceRefresh);
 }
 
 // Debounced SSE reconnect helper with backoff
@@ -621,7 +707,7 @@ function scheduleSSEReconnect(reason = 'unknown', delay = 1000) {
     sseReconnectTimer = setTimeout(() => {
         if (window.firebaseAuth && window.firebaseAuth.isAuthenticated()) {
             updateMemoryStatus('Reconnecting...');
-            initializeSSE(true);
+            manageSSEConnection('reconnect_scheduled', true);
         }
     }, delay);
     addLogEntry('info', 'SSE', { action: 'schedule_reconnect', reason, delay, attempt: sseReconnectAttempts }, true);
@@ -1963,7 +2049,7 @@ function startNewSession() {
         try { eventSource.close(); } catch (_) {}
         eventSource = null;
     }
-    initializeSSE(true);
+    manageSSEConnection('new_session', true);
     
     // Show welcome modal again
     showWelcomeModal();
