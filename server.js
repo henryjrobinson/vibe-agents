@@ -159,7 +159,7 @@ app.get('/env.js', (req, res) => {
 app.get('/api/user/preferences/:key', verifyFirebaseToken, ensureUserScope, async (req, res) => {
     try {
         const { key } = req.params;
-        const value = await db.getUserPreference(req.user.uid, key);
+        const value = await db.getUserPreference(req.user.uid, req.user.email, key);
         res.json({ key, value });
     } catch (error) {
         console.error('Error getting user preference:', error);

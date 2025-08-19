@@ -243,9 +243,9 @@ class Database {
         }
     }
 
-    async getUserPreference(firebaseUid, key) {
+    async getUserPreference(firebaseUid, email, key) {
         try {
-            const dbUserId = await this.ensureUser(firebaseUid);
+            const dbUserId = await this.ensureUser(firebaseUid, email);
             const result = await this.pool.query(
                 'SELECT value FROM user_preferences WHERE user_id = $1 AND key = $2',
                 [dbUserId, key]
