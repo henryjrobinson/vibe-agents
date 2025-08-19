@@ -591,7 +591,7 @@ app.post('/api/memory-keeper', verifyFirebaseToken, ensureUserScope, async (req,
             }, { anthropic }),
             20000,
             'Anthropic memory keeper timeout'
-        ).catch(() => ({ people: [], dates: [], places: [], relationships: [], events: [] }));
+        ).catch(() => ({ narrator: '', people: [], dates: [], places: [], relationships: [], events: [] }));
 
         // Save if non-empty and return saved id
         const saved = await memoryStore.saveMemory({ 

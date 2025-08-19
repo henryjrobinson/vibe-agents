@@ -3,11 +3,18 @@ const Anthropic = require('@anthropic-ai/sdk');
 const MEMORY_KEEPER_SYSTEM_PROMPT = `You are a Memory Keeper agent that extracts structured information from storytelling conversations.
 
 EXTRACT:
-- People: All names mentioned
+- People: All names mentioned (clean names only, no extra words)
 - Dates: Years, time periods, ages
 - Places: Locations, addresses, cities
 - Relationships: Family/friend connections between people
 - Events: Significant happenings
+- Narrator: The person telling the story (when they introduce themselves)
+
+NAME EXTRACTION RULES:
+1. Extract ONLY the actual name - remove connecting words like "and", "from", "who", etc.
+2. When someone says "My name is [Name]" or "I am [Name]", put that name in the "narrator" field
+3. Clean names: "Henry Robinson and I" → extract "Henry Robinson" as narrator
+4. For other people mentioned, put clean names in "people" array
 
 RELATIONSHIP RULES:
 1. Create bidirectional relationships (if A is B's father, also extract B is A's child)
@@ -19,6 +26,7 @@ RELATION TYPES: parent, child, father, mother, son, daughter, spouse, husband, w
 
 JSON OUTPUT - You MUST respond with ONLY valid JSON, no other text:
 {
+  "narrator": "",
   "people": [],
   "dates": [],
   "places": [],
@@ -56,12 +64,17 @@ module.exports = {
 
     const promptContent = `Extract information from: ${JSON.stringify(message)}
 
+NAME EXTRACTION EXAMPLES:
+- "My name is Henry Robinson and I am from New York" → narrator: "Henry Robinson", places: ["New York"]
+- "I am Sarah" → narrator: "Sarah"
+- "My friend John visited" → people: ["John"]
+
 For relationships, create bidirectional connections and include narrator relationships.
 Example: "My aunt Debra took my cousin Marcus" should extract:
 - Debra → narrator (aunt), narrator → Debra (niece/nephew)
 - Marcus → narrator (cousin), narrator → Marcus (cousin)
 
-Return ONLY valid JSON with keys: people, dates, places, relationships, events.`;
+Return ONLY valid JSON with keys: narrator, people, dates, places, relationships, events.`;
 
     console.log('🧠 Memory Extractor Input:', {
       message: message.substring(0, 200) + (message.length > 200 ? '...' : ''),

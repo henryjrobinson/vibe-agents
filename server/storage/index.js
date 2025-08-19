@@ -13,7 +13,8 @@ class MemoryStore {
   saveMemory({ conversationId = 'default', messageId, payload, createdAt = new Date().toISOString() }) {
     if (!payload || typeof payload !== 'object') return null;
     const nonEmpty = ['people', 'dates', 'places', 'relationships', 'events']
-      .some(k => Array.isArray(payload[k]) && payload[k].length > 0);
+      .some(k => Array.isArray(payload[k]) && payload[k].length > 0) ||
+      (payload.narrator && typeof payload.narrator === 'string' && payload.narrator.trim());
     if (!nonEmpty) return null; // store only meaningful extractions
 
     const mem = {

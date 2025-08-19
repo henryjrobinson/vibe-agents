@@ -576,33 +576,25 @@ async function initializeSSE(forceRefresh = false) {
                     dates: Array.isArray(data.dates) ? data.dates : [],
                     places: Array.isArray(data.places) ? data.places : [],
                     relationships: Array.isArray(data.relationships) ? data.relationships : [],
-                    events: Array.isArray(data.events) ? data.events : []
+                    events: Array.isArray(data.events) ? data.events : [],
+                    narrator: data.narrator || ''
                 };
 
                 // If nothing meaningful, ignore
-                const hasAny = Object.values(extracted).some(arr => arr && arr.length > 0);
+                const hasAny = Object.values(extracted).some(arr => arr && arr.length > 0) || extracted.narrator;
                 if (!hasAny) return;
 
                 updateMemoryDisplay(extracted);
 
-                // Heuristic: detect narrator name from memory payloads and persist
+                // Extract narrator name from new narrator field
                 try {
-                    const payload = data.payload || {};
-                    if (data.category === 'people') {
-                        const items = Array.isArray(payload.people) ? payload.people : [];
-                        for (const person of items) {
-                            const roles = (person.roles || person.role || '').toString().toLowerCase();
-                            const flags = person.flags || {};
-                            const isUser = flags.isUser || flags.self || false;
-                            const names = [person.name, person.preferredName, person.displayName].filter(Boolean);
-                            if ((isUser || roles.includes('narrator') || roles.includes('self') || roles.includes('speaker')) && names.length) {
-                                const candidate = getValidatedDisplayName(names[0]);
-                                if (candidate && candidate !== currentUserName) {
-                                    currentUserName = candidate;
-                                    updateNarratorPill(candidate);
-                                    setUserPreference('narrator_name', currentUserName);
-                                }
-                            }
+                    if (extracted.narrator && typeof extracted.narrator === 'string') {
+                        const candidate = getValidatedDisplayName(extracted.narrator.trim());
+                        if (candidate && candidate !== currentUserName) {
+                            currentUserName = candidate;
+                            updateNarratorPill(candidate);
+                            setUserPreference('narrator_name', currentUserName);
+                            console.log('📝 Narrator name extracted and saved:', candidate);
                         }
                     }
                 } catch (_) { /* ignore name detection issues */ }
