@@ -63,6 +63,12 @@ Example: "My aunt Debra took my cousin Marcus" should extract:
 
 Return ONLY valid JSON with keys: people, dates, places, relationships, events.`;
 
+    console.log('🧠 Memory Extractor Input:', {
+      message: message.substring(0, 200) + (message.length > 200 ? '...' : ''),
+      model: effectiveModel,
+      max_tokens
+    });
+
     const response = await anthropic.messages.create({
       model: effectiveModel,
       max_tokens,
@@ -70,10 +76,15 @@ Return ONLY valid JSON with keys: people, dates, places, relationships, events.`
       messages: [{ role: 'user', content: promptContent }]
     });
 
+    const rawResponse = response.content?.[0]?.text || '{}';
+    console.log('🧠 Memory Extractor Raw Response:', rawResponse);
+
     let json;
     try {
-      json = JSON.parse(response.content?.[0]?.text || '{}');
+      json = JSON.parse(rawResponse);
+      console.log('🧠 Memory Extractor Parsed:', json);
     } catch (e) {
+      console.error('🧠 Memory Extractor Parse Error:', e.message);
       json = { people: [], dates: [], places: [], relationships: [], events: [] };
     }
     return json;
