@@ -235,7 +235,7 @@ class Database {
                  VALUES ($1, $2, $3, NOW())
                  ON CONFLICT (user_id, key)
                  DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-                [dbUserId, key, value]
+                [dbUserId, key, JSON.stringify(value)]
             );
             console.log(`🔧 DB preference upsert completed for user ${dbUserId}`);
             await this.logAction(dbUserId, 'UPSERT', 'user_preference', null, null, null);
@@ -257,7 +257,7 @@ class Database {
             );
             console.log(`🔧 DB query result: ${result.rows.length} rows`);
             if (result.rows.length === 0) return null;
-            const value = result.rows[0].value;
+            const value = JSON.parse(result.rows[0].value);
             console.log(`🔧 DB returning value: ${value}`);
             return value;
         } catch (error) {
