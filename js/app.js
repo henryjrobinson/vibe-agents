@@ -1125,9 +1125,19 @@ async function sendMessage() {
     // Opportunistic: extract and persist name from user's message if not known yet
     try {
         if (!getValidatedDisplayName(currentUserName)) {
-            const match = message.match(/\b(?:my name is|i am|i'm)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,2})\b/i);
-            if (match && match[1]) {
-                const candidate = getValidatedDisplayName(match[1]);
+            // Pattern 1: "my name is Henry" or "I am Henry"
+            const explicitMatch = message.match(/\b(?:my name is|i am|i'm)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,2})\b/i);
+            if (explicitMatch && explicitMatch[1]) {
+                const candidate = getValidatedDisplayName(explicitMatch[1]);
+                if (candidate) {
+                    currentUserName = candidate;
+                    updateNarratorPill(candidate);
+                    setUserPreference('narrator_name', candidate);
+                }
+            }
+            // Pattern 2: Single word that looks like a name (fallback for simple "Henry" responses)
+            else if (message.trim().match(/^[A-Z][a-zA-Z]{1,15}$/)) {
+                const candidate = getValidatedDisplayName(message.trim());
                 if (candidate) {
                     currentUserName = candidate;
                     updateNarratorPill(candidate);
