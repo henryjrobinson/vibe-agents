@@ -23,6 +23,3 @@ const FIREBASE_CONFIG = {
 // Export for use in other modules
 window.API_CONFIG = API_CONFIG;
 window.FIREBASE_CONFIG = FIREBASE_CONFIG;
-
-console.log(`🔗 API Endpoints:`, API_CONFIG);
-console.log(`🔥 Firebase Config:`, { ...FIREBASE_CONFIG, apiKey: '[REDACTED]' });

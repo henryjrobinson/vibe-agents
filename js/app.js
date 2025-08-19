@@ -10,12 +10,253 @@ let currentSession = {
     }
 };
 
+// Initialize collapsible memory sections with persisted state
+function initCollapsibleMemorySections() {
+    const STORAGE_KEY = 'memorySectionCollapsed';
+    let state = {};
+    try { state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {}; } catch (_) { state = {}; }
+
+    const sections = document.querySelectorAll('.memory-section');
+    sections.forEach((section, index) => {
+        const header = section.querySelector('h4');
+        const items = section.querySelector('.memory-items');
+        if (!header || !items) return;
+
+        const key = items.id || `section-${index}`;
+        if (state[key]) {
+            section.classList.add('collapsed');
+        }
+
+        header.tabIndex = 0;
+        header.setAttribute('role', 'button');
+        header.setAttribute('aria-expanded', String(!section.classList.contains('collapsed')));
+
+        const toggle = () => {
+            section.classList.toggle('collapsed');
+            const collapsed = section.classList.contains('collapsed');
+            header.setAttribute('aria-expanded', String(!collapsed));
+            state[key] = collapsed;
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
+        };
+
+        header.addEventListener('click', toggle);
+        header.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggle();
+            }
+        });
+    });
+}
+
+// Update counts next to memory section titles, e.g., "People (3)"
+function updateMemorySectionCounts() {
+    const sections = document.querySelectorAll('.memory-section');
+    sections.forEach((section) => {
+        const header = section.querySelector('h4');
+        const itemsContainer = section.querySelector('.memory-items');
+        if (!header || !itemsContainer) return;
+
+        // Persist original title once
+        if (!header.dataset.baseTitle) {
+            header.dataset.baseTitle = header.textContent.trim().replace(/\s*\(\d+\)$/, '');
+        }
+
+        // For Narrator section, never append a count
+        if (itemsContainer.id === 'memory-narrator') {
+            header.textContent = header.dataset.baseTitle;
+            return;
+        }
+
+        // Count memory items (exclude placeholders)
+        const count = Array.from(itemsContainer.children)
+            .filter(el => el.classList && el.classList.contains('memory-item')).length;
+        header.textContent = `${header.dataset.baseTitle} (${count})`;
+    });
+}
+
+// Observe memory content changes and update counts automatically
+function initMemoryCountsObserver() {
+    const content = document.querySelector('.memory-content');
+    if (!content) return;
+    const debounced = (() => {
+        let t;
+        return () => { clearTimeout(t); t = setTimeout(updateMemorySectionCounts, 100); };
+    })();
+    const observer = new MutationObserver(debounced);
+    observer.observe(content, { childList: true, subtree: true, attributes: true });
+    // Initial compute
+    updateMemorySectionCounts();
+}
+
+// UI: narrator name as a memory item rendering and editing
+function updateNarratorPill(nameValue = currentUserName) {
+    const container = document.getElementById('memory-narrator');
+    if (!container) return;
+    // Remove placeholder if present
+    const placeholder = container.querySelector('.memory-placeholder');
+    if (placeholder) placeholder.remove();
+
+    let item = document.getElementById('narrator-item');
+    const valid = getValidatedDisplayName(nameValue);
+
+    const html = `
+        <div class="memory-title">Narrator</div>
+        <div class="memory-detail">${valid ? `Name: ${escapeHtml(valid)}` : 'Click to set your name'}</div>
+    `;
+
+    if (!item) {
+        item = document.createElement('div');
+        item.id = 'narrator-item';
+        item.className = 'memory-item narrator';
+        item.innerHTML = html;
+        container.prepend(item);
+        // Attach click handler once
+        item.addEventListener('click', onNarratorItemClick);
+    } else {
+        item.innerHTML = html;
+    }
+}
+
+function onNarratorItemClick() {
+    const current = getValidatedDisplayName(currentUserName) || '';
+    const proposed = prompt('What should I call you?', current);
+    if (proposed === null) return; // cancelled
+    const validated = getValidatedDisplayName(proposed);
+    if (!validated) {
+        alert('Please enter a valid name.');
+        return;
+    }
+    if (!confirm(`Are you sure you want to set your name to "${validated}"?`)) return;
+    (async () => {
+        try {
+            await setUserPreference('narrator_name', validated);
+            currentUserName = validated;
+            updateNarratorPill(validated);
+            addMessage('system', 'system', `Name updated to ${validated}.`, { timestamp: new Date().toLocaleTimeString() });
+        } catch (e) {
+            console.error('Failed to persist narrator_name', e);
+            alert('Sorry, I could not save your name. Please try again.');
+        }
+    })();
+}
+
+// Simple HTML escaper for safe rendering
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+// Wait until Firebase auth is ready with a user (or timeout)
+async function waitForAuthReady(maxMs = 4000) {
+    const start = Date.now();
+    // Quick path
+    if (window.firebaseAuth?.isAuthenticated && window.firebaseAuth.isAuthenticated()) return true;
+    // Subscribe and wait
+    return new Promise((resolve) => {
+        let resolved = false;
+        const done = (val) => { if (!resolved) { resolved = true; resolve(val); } };
+        const timer = setInterval(() => {
+            if (window.firebaseAuth?.isAuthenticated && window.firebaseAuth.isAuthenticated()) {
+                clearInterval(timer);
+                done(true);
+            } else if (Date.now() - start > maxMs) {
+                clearInterval(timer);
+                done(false); // give up, continue best-effort
+            }
+        }, 100);
+        // Also hook one-time auth state
+        try {
+            window.firebaseAuth?.onAuthStateChanged?.((u) => {
+                if (u) {
+                    clearInterval(timer);
+                    done(true);
+                }
+            });
+        } catch (_) { /* ignore */ }
+    });
+}
+
+// Merge helper with simple de-duplication by string key
+function mergeMemoryArrays(targetArr, incomingArr, maxItems = 200) {
+    const set = new Set(targetArr.map(v => typeof v === 'string' ? v : JSON.stringify(v)));
+    for (const v of incomingArr) {
+        const key = typeof v === 'string' ? v : JSON.stringify(v);
+        if (!set.has(key)) {
+            targetArr.push(v);
+            set.add(key);
+        }
+        if (targetArr.length >= maxItems) break;
+    }
+    return targetArr;
+}
+
+// Build a compact one-time memory primer for Collaborator
+function buildMemoryPrimer(memories, caps = { people: 5, places: 5, dates: 3, relationships: 5, events: 5, totalChars: 600 }) {
+    if (!memories) return '';
+    const lines = [];
+    const pick = (arr, n) => Array.isArray(arr) ? arr.slice(-n) : [];
+    const toText = (v) => typeof v === 'string' ? v : (v && (v.name || v.title || v.event || v.person || v.place || v.description)) || JSON.stringify(v);
+    const people = pick(memories.people, caps.people).map(toText);
+    const places = pick(memories.places, caps.places).map(toText);
+    const dates = pick(memories.dates, caps.dates).map(toText);
+    const relationships = pick(memories.relationships, caps.relationships).map(toText);
+    const events = pick(memories.events, caps.events).map(toText);
+    if ([people, places, dates, relationships, events].every(a => a.length === 0)) return '';
+    if (people.length) lines.push(`People: ${people.join('; ')}`);
+    if (places.length) lines.push(`Places: ${places.join('; ')}`);
+    if (dates.length) lines.push(`Dates: ${dates.join('; ')}`);
+    if (relationships.length) lines.push(`Relationships: ${relationships.join('; ')}`);
+    if (events.length) lines.push(`Events: ${events.join('; ')}`);
+    let text = `Context reminder from your saved memories (do not repeat verbatim):\n${lines.join('\n')}`;
+    if (text.length > caps.totalChars) {
+        text = text.slice(0, caps.totalChars - 3) + '...';
+    }
+    return text;
+}
+
+// Hydrate persisted memories from server and render
+async function hydratePersistedMemories() {
+    const id = getConversationId();
+    const resp = await fetchWithTimeout(`/api/memories?conversationId=${encodeURIComponent(id)}`, { method: 'GET', timeout: 15000 });
+    if (!resp.ok) {
+        throw new Error(`memories_api_${resp.status}`);
+    }
+    const data = await resp.json();
+    const combined = { people: [], dates: [], places: [], relationships: [], events: [] };
+    for (const m of (data.memories || [])) {
+        if (m.id) seenMemoryIds.add(m.id);
+        const p = m.payload || {};
+        if (Array.isArray(p.people)) combined.people.push(...p.people);
+        if (Array.isArray(p.dates)) combined.dates.push(...p.dates);
+        if (Array.isArray(p.places)) combined.places.push(...p.places);
+        if (Array.isArray(p.relationships)) combined.relationships.push(...p.relationships);
+        if (Array.isArray(p.events)) combined.events.push(...p.events);
+    }
+    // Merge into session with de-dupe
+    currentSession.memories.people = mergeMemoryArrays(currentSession.memories.people, combined.people);
+    currentSession.memories.dates = mergeMemoryArrays(currentSession.memories.dates, combined.dates);
+    currentSession.memories.places = mergeMemoryArrays(currentSession.memories.places, combined.places);
+    currentSession.memories.relationships = mergeMemoryArrays(currentSession.memories.relationships, combined.relationships);
+    currentSession.memories.events = mergeMemoryArrays(currentSession.memories.events, combined.events);
+    updateMemoryDisplay(currentSession.memories);
+    memoryHydrated = true;
+    // Ensure session persists
+    scheduleSecureSave();
+}
+
+
 // Bind SSE lifecycle to Firebase auth state changes
 function setupAuthSSEBinding() {
     const bind = () => {
         if (!window.firebaseAuth) return;
         // React to future auth changes
         window.firebaseAuth.onAuthStateChanged(async (user) => {
+            // If we're in controlled bootstrap, skip handler work
+            if (bootstrapInProgress) return;
             if (eventSource) {
                 try { eventSource.close(); } catch (_) {}
                 eventSource = null;
@@ -24,6 +265,20 @@ function setupAuthSSEBinding() {
                 // Immediately reflect auth state in UI while SSE connects
                 updateMemoryStatus('Connecting...');
                 await initializeSSE(false);
+                // After SSE is up, hydrate persisted memories once per load
+                try {
+                    if (!memoryHydrated) {
+                        await hydratePersistedMemories();
+                    }
+                    // Fetch durable narrator name preference
+                    const name = await getUserPreference('narrator_name');
+                    if (typeof name === 'string' && name.trim()) {
+                        currentUserName = name.trim();
+                        updateNarratorPill(currentUserName);
+                    }
+                } catch (e) {
+                    console.warn('Hydration error:', e);
+                }
             } else {
                 updateMemoryStatus('Not authenticated');
                 // Note: auth-guard.js handles redirect to avoid double-redirect conflicts
@@ -45,12 +300,111 @@ function setupAuthSSEBinding() {
 
         // Initial load: wait for Firebase to report auth state to avoid race-condition redirects
         updateMemoryStatus('Checking sign-in...');
+
+        // Also hydrate durable narrator name once authenticated
+        const fetchName = async () => {
+            try {
+                const name = await getUserPreference('narrator_name');
+                if (typeof name === 'string' && name.trim()) {
+                    currentUserName = name.trim();
+                }
+            } catch (_) { /* ignore */ }
+        };
+        if (window.firebaseAuth?.isAuthenticated()) {
+            fetchName();
+        } else {
+            window.firebaseAuth?.onAuthStateChanged((u) => { if (u) fetchName(); });
+        }
     };
 
     if (window.firebaseAuth) {
         bind();
     } else {
         window.addEventListener('firebase-ready', bind, { once: true });
+    }
+}
+
+// Loader helpers
+function showAppLoader() {
+    const el = document.getElementById('app-loader');
+    if (el) el.style.display = 'flex';
+    try { console.log('[app] showAppLoader @', Date.now()); } catch (_) {}
+}
+function hideAppLoader() {
+    const el = document.getElementById('app-loader');
+    if (el) el.style.display = 'none';
+    try { console.log('[app] hideAppLoader @', Date.now()); } catch (_) {}
+}
+
+// Controlled app bootstrap to avoid race conditions on startup
+async function bootstrapApp() {
+    try {
+        try { console.log('[bootstrap] start @', Date.now()); } catch (_) {}
+        // 1) Secure storage + session
+        await waitForSecureStorage();
+        const sessionRestored = await loadSecureSession();
+
+        // 2) Auth readiness + fresh token
+        await waitForAuthReady();
+        if (window.firebaseAuth?.isAuthenticated()) {
+            try { await window.firebaseAuth.getIdToken(true); } catch (_) {}
+        }
+
+        // 3) Fetch durable narrator name preference before deciding greeting
+        try {
+            const prefName = await getUserPreference('narrator_name');
+            const validated = getValidatedDisplayName(prefName);
+            if (validated) {
+                currentUserName = validated;
+            }
+        } catch (_) { /* ignore */ }
+        updateNarratorPill(currentUserName);
+
+        // 4) Initialize SSE and hydrate persisted memories
+        await initializeSSE(true);
+        try {
+            if (!memoryHydrated) await hydratePersistedMemories();
+        } catch (e) { console.warn('Bootstrap hydration error:', e); }
+
+        // 4b) Compute new vs returning user flag deterministically
+        try {
+            const hasValidName = !!getValidatedDisplayName(currentUserName);
+            const hasMessages = (currentSession.messages || []).length > 0;
+            const hasMemories = Object.values(currentSession.memories || {}).some(arr => (arr || []).length > 0);
+            const cameFromSplash = localStorage.getItem('story-collection-used') === 'true';
+            const sessionMarker = localStorage.getItem('story_session_exists') === 'true';
+            isNewUserFlag = !!(cameFromSplash && !sessionRestored && !sessionMarker && !hasValidName && !hasMessages && !hasMemories);
+            console.log('[onboarding] bootstrap computed isNewUserFlag:', {
+                cameFromSplash,
+                sessionRestored,
+                sessionMarker,
+                hasValidName,
+                hasMessages,
+                hasMemories,
+                memoryHydrated,
+                isNewUserFlag
+            });
+        } catch (e) {
+            console.warn('[onboarding] failed to compute isNewUserFlag', e);
+            isNewUserFlag = null;
+        }
+
+        // 5) Hide loader and signal readiness
+        hideAppLoader();
+        bootstrapInProgress = false;
+        try { window.dispatchEvent(new Event('app-bootstrap-complete')); } catch(_) {}
+        try { console.log('[bootstrap] end (success) @', Date.now()); } catch (_) {}
+
+        // 6) Decide returning vs new user after data is ready
+        await autoStartConversation();
+    } catch (e) {
+        console.error('Bootstrap failed:', e);
+        hideAppLoader();
+        bootstrapInProgress = false;
+        try { window.dispatchEvent(new Event('app-bootstrap-complete')); } catch(_) {}
+        try { console.log('[bootstrap] end (error) @', Date.now()); } catch (_) {}
+        // Fallback: proceed with conversation anyway
+        await autoStartConversation();
     }
 }
 
@@ -73,8 +427,61 @@ const seenMemoryIds = new Set();
 let sseReconnectTimer = null;
 let lastSseToken = null;
 let lastSseUrl = null;
+// Persistence hydration and primer flags
+let memoryHydrated = false;
+let memoryPrimerInjected = false;
+// Durable user identity (narrator name)
+let currentUserName = null;
+// Bootstrap guard to avoid double init
+let bootstrapInProgress = false;
+// New vs Returning flag (computed during bootstrap)
+let isNewUserFlag = null;
 
-// Generate or load a persistent conversationId
+// User preferences helpers
+function getValidatedDisplayName(raw) {
+    if (!raw) return null;
+    const name = String(raw).trim();
+    if (!name) return null;
+    // Common bad extractions
+    const invalids = new Set(['naratory','narratory','narrator','user','me','self','speaker','unknown','n/a','na']);
+    if (invalids.has(name.toLowerCase())) return null;
+    // Heuristic: require at least 2 alpha characters total
+    const alphaCount = (name.match(/[A-Za-z]/g) || []).length;
+    if (alphaCount < 2) return null;
+    // Cap length to avoid prompt issues
+    if (name.length > 60) return name.slice(0, 60);
+    return name;
+}
+async function getUserPreference(key) {
+    try {
+        const url = `/api/user/preferences/${encodeURIComponent(key)}`;
+        const resp = await fetchWithTimeout(url, { method: 'GET', timeout: 10000 });
+        if (!resp.ok) return null;
+        const data = await resp.json();
+        console.log('[prefs] get', key, '=>', data?.value ?? null);
+        return data?.value ?? null;
+    } catch (e) { console.warn('[prefs] get failed', key, e); return null; }
+}
+
+async function setUserPreference(key, value) {
+    try {
+        const url = `/api/user/preferences/${encodeURIComponent(key)}`;
+        const resp = await fetchWithTimeout(url, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ value }),
+            timeout: 10000
+        });
+        if (!resp.ok) throw new Error('pref_set_failed_' + resp.status);
+        console.log('[prefs] set', key, '=>', value);
+        return true;
+    } catch (e) {
+        console.error('Failed to set preference', key, e);
+        return false;
+    }
+}
+
+// Return a stable conversation id, persisted in localStorage
 function getConversationId() {
     if (conversationId) return conversationId;
     try {
@@ -83,7 +490,9 @@ function getConversationId() {
             conversationId = stored;
             return conversationId;
         }
-        const id = (crypto && crypto.randomUUID) ? crypto.randomUUID() : `c_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const id = (crypto && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : `c_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         localStorage.setItem('conversationId', id);
         conversationId = id;
         return conversationId;
@@ -166,6 +575,28 @@ async function initializeSSE(forceRefresh = false) {
                 if (!hasAny) return;
 
                 updateMemoryDisplay(extracted);
+
+                // Heuristic: detect narrator name from memory payloads and persist
+                try {
+                    const payload = data.payload || {};
+                    if (data.category === 'people') {
+                        const items = Array.isArray(payload.people) ? payload.people : [];
+                        for (const person of items) {
+                            const roles = (person.roles || person.role || '').toString().toLowerCase();
+                            const flags = person.flags || {};
+                            const isUser = flags.isUser || flags.self || false;
+                            const names = [person.name, person.preferredName, person.displayName].filter(Boolean);
+                            if ((isUser || roles.includes('narrator') || roles.includes('self') || roles.includes('speaker')) && names.length) {
+                                const candidate = getValidatedDisplayName(names[0]);
+                                if (candidate && candidate !== currentUserName) {
+                                    currentUserName = candidate;
+                                    updateNarratorPill(candidate);
+                                    setUserPreference('narrator_name', currentUserName);
+                                }
+                            }
+                        }
+                    }
+                } catch (_) { /* ignore name detection issues */ }
                 updateMemoryStatus('Complete');
                 addLogEntry('output', 'Memory Keeper', { source: 'sse', ...data }, false);
             } catch (e) {
@@ -285,12 +716,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     initializeDebugPanel();
     setupAuthSSEBinding();
     
-    // Wait for secure storage to be ready before loading session
-    await waitForSecureStorage();
-    await loadSecureSession(); // Load encrypted session data
-    
-    // Auto-trigger initial conversation for new users
-    autoStartConversation();
+    // Defer reveal + loader + bootstrap to auth-guard's signal
+    window.addEventListener('page-revealed', async () => {
+        console.log('[app] page-revealed received, starting bootstrap');
+        bootstrapInProgress = true;
+        showAppLoader();
+        // Perform bootstrap orchestration
+        await bootstrapApp();
+        // Initialize collapsible memory sections and counts after bootstrap
+        initCollapsibleMemorySections();
+        initMemoryCountsObserver();
+    }, { once: true });
 });
 
 /**
@@ -404,9 +840,15 @@ function restoreSessionUI() {
     // Restore memory display
     updateMemoryDisplay(currentSession.memories);
     
-    // Show continuation prompt if we have previous memories
+    // Do NOT trigger continuation prompt here during bootstrap; let autoStartConversation decide
     const totalMemories = Object.values(currentSession.memories).reduce((sum, arr) => sum + arr.length, 0);
-    if (totalMemories > 0) {
+    console.log('[onboarding] restoreSessionUI summary:', {
+        totalMemories,
+        bootstrapInProgress,
+        isNewUserFlag
+    });
+    // If not bootstrapping and clearly returning, you may show prompt; otherwise leave to autoStartConversation
+    if (!bootstrapInProgress && totalMemories > 0 && isNewUserFlag === false) {
         showContinuationPrompt();
     }
     
@@ -666,6 +1108,21 @@ async function sendMessage() {
     
     // Add user message
     addMessage('user', 'user', message, { timestamp: new Date().toLocaleTimeString() });
+
+    // Opportunistic: extract and persist name from user's message if not known yet
+    try {
+        if (!getValidatedDisplayName(currentUserName)) {
+            const match = message.match(/\b(?:my name is|i am|i'm)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,2})\b/i);
+            if (match && match[1]) {
+                const candidate = getValidatedDisplayName(match[1]);
+                if (candidate) {
+                    currentUserName = candidate;
+                    updateNarratorPill(candidate);
+                    setUserPreference('narrator_name', candidate);
+                }
+            }
+        }
+    } catch (_) { /* ignore */ }
     
     // Disable input while processing
     input.disabled = true;
@@ -796,6 +1253,21 @@ async function processWithCollaborator(message) {
                 role: msg.type === 'user' ? 'user' : 'assistant',
                 content: msg.content
             }));
+        // Always inject a tiny name primer so the model reliably knows the speaker's name
+        if (currentUserName && currentUserName.trim()) {
+            conversationHistory.push({
+                role: 'user',
+                content: `(meta) The speaker's name is ${currentUserName.trim()}. Greet and address them as ${currentUserName.trim()}.`
+            });
+        }
+        // Inject a one-time primer built from persisted memories
+        if (!memoryPrimerInjected && memoryHydrated) {
+            const primer = buildMemoryPrimer(currentSession.memories);
+            if (primer && primer.length) {
+                conversationHistory.push({ role: 'user', content: primer });
+                memoryPrimerInjected = true;
+            }
+        }
         
         const requestBody = { 
             message,
@@ -1458,6 +1930,25 @@ function startNewSession() {
     
     // Clear secure session storage
     clearSecureSession();
+
+    // Start a fresh, non-destructive conversation by generating a new ID
+    try {
+        const id = (crypto && crypto.randomUUID) ? crypto.randomUUID() : `c_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        localStorage.setItem('conversationId', id);
+        conversationId = id;
+    } catch (_) {
+        conversationId = `c_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        localStorage.setItem('conversationId', conversationId);
+    }
+    // Reset flags and SSE state
+    memoryHydrated = false;
+    memoryPrimerInjected = false;
+    seenMemoryIds.clear();
+    if (eventSource) {
+        try { eventSource.close(); } catch (_) {}
+        eventSource = null;
+    }
+    initializeSSE(true);
     
     // Show welcome modal again
     showWelcomeModal();
@@ -1466,32 +1957,85 @@ function startNewSession() {
 /**
  * Auto-start conversation for new users coming from splash page
  */
-function autoStartConversation() {
-    // Check if user just came from splash page or is a new user
-    const isNewUser = !localStorage.getItem('story_session_exists');
-    const hasNoMessages = currentSession.messages.length === 0;
-    const justStarted = localStorage.getItem('story-collection-used') === 'true';
+async function autoStartConversation() {
+    // Attempt to ensure we have a narrator name before deciding
+    if (!getValidatedDisplayName(currentUserName)) {
+        try {
+            const prefName = await getUserPreference('narrator_name');
+            const validated = getValidatedDisplayName(prefName);
+            if (validated) currentUserName = validated;
+        } catch (_) { /* ignore */ }
+    }
 
-    // Auto-start conversation for new users or those coming from splash
-    if ((isNewUser || hasNoMessages) && justStarted) {
-        console.log(' New user detected, starting conversation automatically...');
-        setTimeout(() => {
-            startInitialConversation();
-        }, 1000);
+    const hasValidName = !!getValidatedDisplayName(currentUserName);
+    const hasMemories = Object.values(currentSession.memories).some(arr => arr.length > 0);
+    const hasMessages = currentSession.messages.length > 0;
+    const cameFromSplash = localStorage.getItem('story-collection-used') === 'true';
+    const sessionMarker = localStorage.getItem('story_session_exists') === 'true';
+
+    // Primary decision: use computed flag when available
+    let decision;
+    if (isNewUserFlag === true) {
+        decision = 'new';
+    } else if (isNewUserFlag === false) {
+        decision = 'returning';
     } else {
-        console.log(' Returning user detected, showing continuation prompt');
+        // Fallback heuristic if flag is unavailable
+        const heuristicReturning = hasValidName || hasMemories || hasMessages || sessionMarker || !cameFromSplash;
+        decision = heuristicReturning ? 'returning' : 'new';
+    }
+
+    console.log('[onboarding] autoStartConversation inputs:', {
+        hasValidName,
+        hasMemories,
+        hasMessages,
+        cameFromSplash,
+        sessionMarker,
+        memoryHydrated,
+        bootstrapInProgress,
+        isNewUserFlag,
+        decision
+    });
+
+    if (decision === 'new') {
+        console.log('[onboarding] New user detected, starting conversation automatically...');
+        setTimeout(() => startInitialConversation(), 600);
+        return;
+    }
+
+    // Returning user: optionally delay continuation until hydration completes
+    const showContinuation = () => {
+        console.log('[onboarding] Showing continuation prompt');
         showContinuationPrompt();
+    };
+
+    if (!memoryHydrated) {
+        console.log('[onboarding] Delaying continuation prompt until memory hydration completes');
+        let attempts = 0;
+        const maxAttempts = 20; // ~6s total at 300ms interval
+        const poll = () => {
+            if (memoryHydrated || attempts >= maxAttempts) {
+                showContinuation();
+            } else {
+                attempts += 1;
+                setTimeout(poll, 300);
+            }
+        };
+        poll();
+    } else {
+        showContinuation();
     }
 }
 
-/**
- * Show continuation prompt for returning users
- */
+// Show continuation prompt for returning users
 function showContinuationPrompt() {
     const totalMemories = Object.values(currentSession.memories).reduce((sum, arr) => sum + arr.length, 0);
 
     // Create a continuation message
-    let continuationPrompt = "Welcome back! I can see we've been collecting your memories together. ";
+    const displayName = getValidatedDisplayName(currentUserName);
+    let continuationPrompt = displayName
+        ? `Hello ${displayName}, welcome back! I can see we've been collecting your memories together. `
+        : "Welcome back! I can see we've been collecting your memories together. Could you remind me of your name? ";
 
     if (totalMemories > 0) {
         continuationPrompt += `So far, we've captured ${totalMemories} memories including `;
@@ -1506,19 +2050,19 @@ function showContinuationPrompt() {
 
     continuationPrompt += "Would you like to continue sharing more stories, or would you like to elaborate on something we've already discussed?";
 
-    // Display the continuation message
-    displayMessage(continuationPrompt, 'ai', false);
+    // Display the continuation message via standard chat pipeline
+    addMessage('ai', 'collaborator', continuationPrompt, { timestamp: new Date().toLocaleTimeString() });
 }
 
 /**
  * Start the initial conversation with the Collaborator
  */
 function startInitialConversation() {
-    // Add initial collaborator message
-    addMessage('assistant', 'Collaborator', 
-        "Hello! I'm so glad you're here to share your stories with me. I'm your Collaborator, and I'll be asking thoughtful questions to help you share your memories. The Memory Keeper will be organizing everything we discuss.\n\nLet's start with something simple - could you tell me your name and where you grew up?",
-        { timestamp: new Date().toLocaleTimeString() }
-    );
+    // Add initial collaborator message, personalized if we know the user's name
+    const greeting = currentUserName && currentUserName.trim()
+        ? `Hello ${currentUserName}! I'm so glad you're here to share your stories with me. I'm your Collaborator, and I'll be asking thoughtful questions to help you share your memories. The Memory Keeper will be organizing everything we discuss.\n\nWould you like to continue from where we left off, or start a new story?`
+        : `Hello! I'm so glad you're here to share your stories with me. I'm your Collaborator, and I'll be asking thoughtful questions to help you share your memories. The Memory Keeper will be organizing everything we discuss.\n\nLet's start with something simple - could you tell me your name and where you grew up?`;
+    addMessage('ai', 'collaborator', greeting, { timestamp: new Date().toLocaleTimeString() });
     
     // Mark that we've started the session
     localStorage.setItem('story_session_exists', 'true');

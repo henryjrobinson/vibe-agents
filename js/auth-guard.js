@@ -6,11 +6,23 @@
   try {
     // Add guard immediately to prevent paint
     document.documentElement.classList.add('auth-guard');
+    if (window.console && console.log) console.log('[guard] install @', Date.now());
   } catch (_) {}
 
   function reveal() {
+    try {
+      // Ensure loader is visible on first paint
+      const loader = document.getElementById('app-loader');
+      if (loader) loader.style.display = 'flex';
+    } catch (_) {}
     try { document.documentElement.classList.remove('auth-guard'); } catch (_) {}
     try { if (document.body) document.body.hidden = false; } catch (_) {}
+    try {
+      // Signal to the app that the page has been revealed
+      window.dispatchEvent(new Event('page-revealed'));
+      // Optional debug log
+      if (window.console && console.log) console.log('[guard] page-revealed @', Date.now());
+    } catch (_) {}
   }
 
   function redirectToLogin() {
@@ -21,6 +33,7 @@
   let pendingRedirectTimer = null;
   function scheduleRedirect(delayMs) {
     if (pendingRedirectTimer) return; // already scheduled
+    if (window.console && console.log) console.log('[guard] scheduleRedirect', delayMs, '@', Date.now());
     pendingRedirectTimer = setTimeout(() => {
       redirectToLogin();
     }, delayMs);
@@ -43,6 +56,7 @@
     let sawFirstAuthEvent = false;
     auth.onAuthStateChanged(function(user) {
       sawFirstAuthEvent = true;
+      if (window.console && console.log) console.log('[guard] onAuthStateChanged user=', !!user, '@', Date.now());
       if (user) {
         cancelRedirect();
         reveal();

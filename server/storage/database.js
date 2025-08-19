@@ -60,9 +60,9 @@ class DatabaseMemoryStore {
             // Get user's database ID
             const dbUserId = await this.db.ensureUser(userId);
             
-            // Get conversation UUID
+            // Get conversation UUID (conversations.title stores the conversationId label)
             const conversationResult = await this.db.pool.query(
-                'SELECT id FROM conversations WHERE user_id = $1 AND conversation_id = $2',
+                'SELECT id FROM conversations WHERE user_id = $1 AND title = $2',
                 [dbUserId, conversationId]
             );
             
@@ -72,10 +72,10 @@ class DatabaseMemoryStore {
             
             // Fetch memories with proper user isolation
             const result = await this.db.pool.query(`
-                SELECT id, message_id, encrypted_payload, created_at
-                FROM memories 
-                WHERE conversation_uuid = $1 AND user_id = $2
-                ORDER BY created_at DESC
+                SELECT m.id, m.message_id, m.encrypted_payload, m.created_at
+                FROM encrypted_memories m
+                WHERE m.conversation_id = $1 AND m.user_id = $2
+                ORDER BY m.created_at DESC
             `, [conversationUuid, dbUserId]);
             
             // Decrypt and return memories
@@ -175,6 +175,23 @@ class DatabaseMemoryStore {
             
         } catch (error) {
             console.error('Error clearing conversation:', error);
+            throw error;
+        }
+    }
+
+    // Clear ALL memories for a user (across all conversations)
+    async clearAllMemories(userId, ipAddress = null, userAgent = null) {
+        if (!userId) return { deleted: 0 };
+        try {
+            const dbUserId = await this.db.ensureUser(userId);
+            const result = await this.db.pool.query(
+                'DELETE FROM encrypted_memories WHERE user_id = $1',
+                [dbUserId]
+            );
+            await this.db.logAction(dbUserId, 'DELETE', 'memory_all', null, ipAddress, userAgent);
+            return { deleted: result.rowCount };
+        } catch (error) {
+            console.error('Error clearing all memories:', error);
             throw error;
         }
     }

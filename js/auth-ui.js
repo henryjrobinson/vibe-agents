@@ -296,7 +296,6 @@ class AuthUI {
             // Check if this is a network error that we should retry
             if (this.shouldRetryError(error) && this.retryCount < this.maxRetries) {
                 this.retryCount++;
-                console.log(`Retrying auth action (attempt ${this.retryCount}/${this.maxRetries})`);
                 
                 // Wait a bit before retrying
                 await new Promise(resolve => setTimeout(resolve, 1000 * this.retryCount));
@@ -464,7 +463,6 @@ class AuthUI {
 
     showAuthenticatedState(user) {
         // Update UI to show authenticated state
-        console.log('User authenticated:', user.email);
         
         // Show user info in header if exists
         const userInfo = document.getElementById('user-info');
@@ -477,7 +475,7 @@ class AuthUI {
             document.getElementById('signout-btn').addEventListener('click', async () => {
                 const result = await window.firebaseAuth.signOut();
                 if (result.success) {
-                    console.log('Signed out successfully');
+                    // no-op
                 }
             });
         }
@@ -497,7 +495,6 @@ class AuthUI {
 
     showUnauthenticatedState() {
         // Update UI to show unauthenticated state
-        console.log('User not authenticated');
         
         const userInfo = document.getElementById('user-info');
         if (userInfo) {

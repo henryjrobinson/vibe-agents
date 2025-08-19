@@ -86,6 +86,7 @@
     createOnboardingModal();
     const modal = document.getElementById('onboarding-modal');
     if (!modal) return;
+    try { console.log('[onboarding] show modal @', Date.now()); } catch (_) {}
     modal.classList.remove('hidden');
     modal.classList.add('flex-visible');
     document.body.style.overflow = 'hidden';
@@ -98,6 +99,20 @@
       const skip = localStorage.getItem(STORAGE_KEY) === '1';
       if (skip) return;
     } catch(_) {}
+
+    const loader = document.getElementById('app-loader');
+    const loaderActive = loader && loader.style.display !== 'none';
+    if (loaderActive) {
+      // Wait for app bootstrap to complete
+      const onReady = () => {
+        window.removeEventListener('app-bootstrap-complete', onReady);
+        // Slight delay to ensure UI is interactive
+        setTimeout(() => showOnboarding(), 200);
+      };
+      try { console.log('[onboarding] waiting for app-bootstrap-complete @', Date.now()); } catch (_) {}
+      window.addEventListener('app-bootstrap-complete', onReady, { once: true });
+      return;
+    }
 
     // Small delay to let the chat UI render before showing
     setTimeout(() => {
@@ -114,6 +129,7 @@
       if (!user || initialized) return;
       initialized = true;
       // Always attempt to show unless locally dismissed
+      try { console.log('[onboarding] auth detected, invoking showPostLoginOnboarding @', Date.now()); } catch (_) {}
       window.showPostLoginOnboarding(user);
     });
   }

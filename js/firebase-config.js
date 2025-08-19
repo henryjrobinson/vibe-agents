@@ -32,8 +32,8 @@ let idTokenCallbacks = [];
 
 // Initialize authentication state listener
 onAuthStateChanged(auth, (user) => {
+    try { console.log('[firebase] onAuthStateChanged user=', !!user, '@', Date.now()); } catch (_) {}
     currentUser = user;
-    console.log('Auth state changed:', user ? `User ${user.email} logged in` : 'User logged out');
     
     // Notify all callbacks
     authStateCallbacks.forEach(callback => {
@@ -47,6 +47,7 @@ onAuthStateChanged(auth, (user) => {
 
 // Listen for ID token changes (refresh, rotation)
 onIdTokenChanged(auth, (user) => {
+    try { console.log('[firebase] onIdTokenChanged user=', !!user, '@', Date.now()); } catch (_) {}
     // Only notify when a user exists; sign-out handled by onAuthStateChanged
     if (!user) {
         // Still notify null to allow listeners to clean up
@@ -162,6 +163,7 @@ window.firebaseAuth = {
         
         // Call immediately with current state (including null) so pages can react on initial load
         try {
+            console.log('[firebase] immediate onAuthStateChanged invoke user=', !!currentUser, '@', Date.now());
             callback(currentUser);
         } catch (e) {
             console.error('Auth state callback immediate invoke error:', e);
@@ -181,6 +183,7 @@ window.firebaseAuth = {
         idTokenCallbacks.push(callback);
         // Immediately invoke with current user (may be null)
         try {
+            console.log('[firebase] immediate onIdTokenChanged invoke user=', !!currentUser, '@', Date.now());
             callback(currentUser);
         } catch (e) {
             console.error('ID token callback immediate invoke error:', e);
@@ -261,6 +264,6 @@ window.firebaseAuth = {
 };
 
 // Signal to the rest of the app that Firebase auth is ready
+try { console.log('[firebase] dispatch firebase-ready @', Date.now()); } catch (_) {}
 window.dispatchEvent(new Event('firebase-ready'));
 
-console.log('🔥 Firebase authentication initialized');

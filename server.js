@@ -24,6 +24,36 @@ const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
+// Clear memories for authenticated user (optionally scoped to a conversation)
+// Only enabled in non-production OR when explicitly allowed via ENABLE_MEMORY_DELETE=true
+if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_MEMORY_DELETE === 'true') {
+    app.delete('/api/memories', verifyFirebaseToken, ensureUserScope, async (req, res) => {
+        try {
+            // Defense-in-depth: re-check at runtime
+            if (process.env.NODE_ENV === 'production' && process.env.ENABLE_MEMORY_DELETE !== 'true') {
+                return res.status(403).json({ error: 'Memory deletion is disabled' });
+            }
+
+            const { conversationId } = req.query || {};
+            const ipAddress = req.ip;
+            const userAgent = req.get('User-Agent');
+
+            if (conversationId && typeof conversationId === 'string') {
+                const ok = await memoryStore.clearConversation(conversationId, req.userId, ipAddress, userAgent);
+                return res.json({ success: true, scope: 'conversation', conversationId, deleted: ok ? 'some' : 0 });
+            }
+
+            const result = await memoryStore.clearAllMemories(req.userId, ipAddress, userAgent);
+            return res.json({ success: true, scope: 'all', deleted: result.deleted });
+        } catch (error) {
+            console.error('Error clearing memories:', error);
+            res.status(500).json({ error: 'Failed to clear memories' });
+        }
+    });
+} else {
+    console.log('DELETE /api/memories endpoint is disabled (production without ENABLE_MEMORY_DELETE=true)');
+}
+
 // List memories for a conversation (requires authentication)
 app.get('/api/memories', verifyFirebaseToken, ensureUserScope, async (req, res) => {
     try {
