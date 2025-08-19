@@ -418,15 +418,16 @@ let selectedModel = 'claude-3-5-haiku-latest'; // Default model - Fast and relia
 let logEntries = [];
 // Guard to prevent rapid double submissions
 let sendInProgress = false;
-
-// Conversation/session identifiers and SSE state
 let conversationId = null;
+// SSE connection state
 let eventSource = null;
-const seenMemoryIds = new Set();
-// SSE reconnect controls
-let sseReconnectTimer = null;
 let lastSseToken = null;
 let lastSseUrl = null;
+let sseReconnectTimer = null;
+const seenMemoryIds = new Set();
+let sseReconnectAttempts = 0;
+let sseMaxReconnectAttempts = 5;
+let sseReconnectDelay = 1000;
 // Persistence hydration and primer flags
 let memoryHydrated = false;
 let memoryPrimerInjected = false;
@@ -537,16 +538,24 @@ async function initializeSSE(forceRefresh = false) {
         eventSource = new EventSource(sseUrl);
 
         eventSource.onopen = () => {
+            sseReconnectAttempts = 0; // Reset on successful connection
             updateMemoryStatus('Ready');
             addLogEntry('info', 'SSE', { status: 'open', conversationId: id }, false);
         };
 
         eventSource.onerror = (err) => {
             console.error('SSE connection error:', err);
-            updateMemoryStatus('Connection error - retrying...');
-            // EventSource auto-reconnects; also schedule a token-refresh reconnect to avoid stale tokens
-            addLogEntry('error', 'SSE', { error: 'connection_error', details: String(err) }, false);
-            scheduleSSEReconnect('sse_onerror', 2000); // Increase delay slightly
+            sseReconnectAttempts++;
+            if (sseReconnectAttempts >= sseMaxReconnectAttempts) {
+                updateMemoryStatus('Connection failed - stopped retrying');
+                addLogEntry('error', 'SSE', { error: 'max_reconnect_attempts_reached', attempts: sseReconnectAttempts }, false);
+                return;
+            }
+            updateMemoryStatus(`Connection error - retry ${sseReconnectAttempts}/${sseMaxReconnectAttempts}`);
+            addLogEntry('error', 'SSE', { error: 'connection_error', attempt: sseReconnectAttempts, details: String(err) }, false);
+            // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+            const delay = Math.min(sseReconnectDelay * Math.pow(2, sseReconnectAttempts - 1), 16000);
+            scheduleSSEReconnect('sse_onerror', delay);
         };
 
         eventSource.addEventListener('memory', (ev) => {
@@ -608,10 +617,14 @@ async function initializeSSE(forceRefresh = false) {
     }
 }
 
-// Debounced SSE reconnect helper
-function scheduleSSEReconnect(reason = 'unknown', delay = 300) {
+// Debounced SSE reconnect helper with backoff
+function scheduleSSEReconnect(reason = 'unknown', delay = 1000) {
     if (sseReconnectTimer) {
         clearTimeout(sseReconnectTimer);
+    }
+    if (sseReconnectAttempts >= sseMaxReconnectAttempts) {
+        addLogEntry('error', 'SSE', { action: 'reconnect_abandoned', reason: 'max_attempts_reached' }, false);
+        return;
     }
     sseReconnectTimer = setTimeout(() => {
         if (window.firebaseAuth && window.firebaseAuth.isAuthenticated()) {
@@ -619,7 +632,7 @@ function scheduleSSEReconnect(reason = 'unknown', delay = 300) {
             initializeSSE(true);
         }
     }, delay);
-    addLogEntry('info', 'SSE', { action: 'schedule_reconnect', reason, delay }, true);
+    addLogEntry('info', 'SSE', { action: 'schedule_reconnect', reason, delay, attempt: sseReconnectAttempts }, true);
 }
 
 // Small helper to enforce client-side timeouts for fetch with Firebase auth
