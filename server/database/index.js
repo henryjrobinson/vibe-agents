@@ -235,7 +235,7 @@ class Database {
                  VALUES ($1, $2, $3, NOW())
                  ON CONFLICT (user_id, key)
                  DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-                [dbUserId, key, JSON.stringify(value)]
+                [dbUserId, key, value]  // Let PostgreSQL JSONB handle JSON serialization automatically
             );
             console.log(`🔧 DB preference upsert completed for user ${dbUserId}`);
             await this.logAction(dbUserId, 'UPSERT', 'user_preference', null, null, null);
@@ -257,7 +257,21 @@ class Database {
             );
             console.log(`🔧 DB query result: ${result.rows.length} rows`);
             if (result.rows.length === 0) return null;
-            const value = JSON.parse(result.rows[0].value);
+            
+            // Handle both new JSONB format and legacy JSON.stringify format
+            let value = result.rows[0].value;
+            
+            // If value is a string that looks like JSON-stringified data, parse it (legacy format)
+            if (typeof value === 'string' && (value.startsWith('"') && value.endsWith('"'))) {
+                try {
+                    console.log(`🔧 DB detected legacy JSON string format, parsing: ${value}`);
+                    value = JSON.parse(value);
+                } catch (parseError) {
+                    console.warn(`⚠️ DB failed to parse legacy JSON string: ${value}, using as-is`);
+                    // Use the string value as-is if JSON parsing fails
+                }
+            }
+            
             console.log(`🔧 DB returning value: ${value}`);
             return value;
         } catch (error) {
