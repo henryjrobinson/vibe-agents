@@ -1,5 +1,8 @@
 # Story System Architecture and Delivery Phases
 
+> **⚠️ FUTURE IMPLEMENTATION PLAN**  
+> This document outlines the planned story processing and RAG system architecture. Most features described here are **not yet implemented** and represent future development phases. Current implementation focuses on basic memory extraction and storage.
+
 ## 1) Context & Goals (JTBD)
 - __Job__: Help families capture, organize, and retrieve life stories with minimal effort.
 - __Desired outcomes__: Accurate story extraction, fast retrieval, emotionally resonant conversations.
@@ -7,21 +10,30 @@
 - __Differentiator__: Agent-assisted extraction + story aggregation + semantic search scoped per user.
 - __Success__: <2s perceived latency for replies; relevant stories retrieved >80% of the time.
 
-## 2) System Overview
+## 2) Current vs Planned System Overview
+
+### **Current Implementation (Production)**
+```
+User → Collaborator (Anthropic) + Memory Keeper (background) → In-memory Storage
+```
+- Memory extraction: `server/tools/memoryExtractor.js` ✅ **IMPLEMENTED**
+- Basic chat with SSE streaming ✅ **IMPLEMENTED**  
+- Firebase authentication ✅ **IMPLEMENTED**
+
+### **Planned System Architecture (Future)**
 ```
 User → Collaborator (Anthropic) + Memory Keeper (background) → Memory Store
       → RAG Pipeline: Aggregation (OpenAI) → Embeddings (pgvector) → Story Store
       → Retrieval for Agents (RAG Client) → Context-augmented responses
 ```
 
-- __Memory extraction__: `server/tools/memoryExtractor.js` (invoked via `executeTool()`)
-- __RAG aggregation__: `server/tools/storyAggregator.js`
-- __RAG orchestration__: `server/tools/ragService.js`
-- __Vector storage & search__: PostgreSQL + pgvector via `server/database/index.js` and `server/storage/storyStore.js`
-- __API gateways__: `server.js` endpoints under `/api/stories/*`, `/api/memory-keeper`, `/chat`
-- __Agent integration__: `server/tools/ragClient.js`
-- __Auth__: Firebase (`server/middleware/auth.js`), all endpoints gated
-- __Privacy__: Optional encryption for payloads in DB via `server/database/index.js`
+**Planned Components (Not Yet Implemented):**
+- __RAG aggregation__: `server/tools/storyAggregator.js` 🚧 **PLANNED**
+- __RAG orchestration__: `server/tools/ragService.js` 🚧 **PLANNED**
+- __Vector storage & search__: PostgreSQL + pgvector 🚧 **PLANNED**
+- __API gateways__: `/api/stories/*` endpoints 🚧 **PLANNED**
+- __Agent integration__: `server/tools/ragClient.js` 🚧 **PLANNED**
+- __Database migrations__: Automated migration system 🚧 **PLANNED**
 
 ## 3) Domain Model (simplified)
 - __Memory__ (extracted): people, places, dates, events, relationships; references `conversationId`, `userId`.
@@ -62,12 +74,15 @@ See schema initialization in `server/database/index.js`:
 
 ## 7) Delivery Phases & Milestones
 
-### Phase 0 — Baseline Enablement (0.5 day)
+### Phase 0 — Baseline Enablement (0.5 day) 🚧 **PLANNED**
 - __Verify env__: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, Firebase vars, `DATABASE_URL`, `ENCRYPTION_KEY` (64 hex or encryption off).
-- __DB__: Ensure pgvector extension and indexes created automatically by `initializeSchema()`.
+- __DB__: 
+  - pgvector extension and indexes created automatically by `initializeSchema()`
+  - Migration system implemented with dual approach (automatic on startup + manual script)
+  - Initial schema (0001) and missing columns (0002) migrations created
 - __Health__: `/api/health` returns Anthropic/OpenAI configured.
-- __Doc__: Confirm `docs/rag-system.md` and this file as the source of truth.
-- __Outcome__: Endpoints online, basic search working with existing data.
+- __Doc__: Updated `docs/DATABASE.md` with migration best practices; this file as the source of truth for architecture.
+- __Outcome__: Database schema complete, migration system operational, ready for story processing.
 
 ### Phase 1 — Latency Quick Wins (0.5–1 day)
 - __Model__: Ensure Haiku by default; reduce `max_tokens` (Collaborator ≈300, Memory ≈300).
@@ -95,9 +110,10 @@ See schema initialization in `server/database/index.js`:
 
 ## 8) Technical Considerations & Risks
 - __Embedding model__: Currently `text-embedding-ada-002` (1536d). Consider `text-embedding-3-small` for cost/quality tradeoff; update dim accordingly.
-- __Type safety__: `storyStore.saveStory()` passes JSON string for vector input; valid for pgvector’s text input format. If switching drivers/ORM, confirm vector binding.
+- __Type safety__: `storyStore.saveStory()` passes JSON string for vector input; valid for pgvector's text input format. If switching drivers/ORM, confirm vector binding.
 - __Memory source__: `ragService.getAllMemoriesForUser()` is a placeholder; implement against actual memory store when processing global backfills.
 - __Index build__: IVFFlat requires `ANALYZE`/vacuum; ensure index build happens on non-empty tables or plan initial backfill step.
+- __Migration safety__: All migrations use IF NOT EXISTS clauses for idempotency; dual migration system ensures flexibility between auto and manual runs.
 
 ## 9) Acceptance Criteria
 - __Stories__: Created via `/api/stories/process` with titles, summaries, embeddings.
@@ -110,6 +126,111 @@ See schema initialization in `server/database/index.js`:
 1. Execute Phase 0 checks and run a small end-to-end: extract → process → search.
 2. Choose Phase 1–2 priorities (speed vs. consolidation).
 3. If needed, implement `getAllMemoriesForUser(userId)` for whole-account processing/backfill.
+
+---
+
+## 11) Industry Best Practices & Research Analysis
+
+### Digital Storytelling Platform Architecture Best Practices
+
+Based on research into current digital storytelling platforms and memory preservation systems, several key architectural patterns have emerged:
+
+#### **Core Data Architecture Models**
+- **Three-Component Framework**: Data foundation + narrative structure + visual elements
+- **Story Object Structure**: Title, summary, content, embeddings, entity arrays (people, places, dates, events)
+- **Memory Aggregation Pattern**: Extract individual facts first, then aggregate into cohesive narratives
+- **Multimedia Integration**: Photos, videos, audio recordings with contextual metadata and captions
+
+#### **Narrative Structure Models**
+- **Freytag's Pyramid**: Five-part narrative structure (exposition, rising action, climax, falling action, resolution) - identified as best balance of simplicity and utility
+- **Data Storytelling Arc**: Problem → tension → insight → resolution → action
+- **Memory Curation**: Organize into thematic chapters (family trips, important dates, customs)
+- **Narrative Arc Components**: Plot (current state) → inciting incident → rising action → climax → falling action → resolution
+
+### Security & Privacy Standards
+
+Current market leaders implement comprehensive security measures:
+- **End-to-end encryption** for sensitive content with AES-256-CBC
+- **User data isolation** (all queries scoped by user_id)
+- **Regular automated backups** with tamper-proof storage
+- **Secure cloud computing** to ensure digital legacies are tamper-proof and endure over time
+- **Privacy-first design** with strict data protection measures
+
+### Performance Architecture Patterns
+
+Modern platforms optimize for speed and user experience:
+- **Vector embeddings** for semantic search (text-embedding-ada-002, 1536d recommended)
+- **Parallel processing** for memory extraction and narrative generation
+- **Indexed entity arrays** (people, places, events, dates) with GIN/IVFFlat indexes
+- **In-memory caching** with PostgreSQL persistence
+- **Background processing** to avoid perceived delays during user interaction
+
+### Elderly User Design Principles
+
+Research shows specific design requirements for elderly users (fastest growing demographic, 73% connected):
+
+#### **Accessibility Requirements**
+- **Large, legible fonts** with customizable sizing (many use reading glasses)
+- **High contrast colors** (avoid blue tones that fade for seniors)
+- **Simple navigation** with clear "home" and "back" buttons as safe points
+- **Voice commands and text-to-speech** support for motor skill accommodation
+- **Large touch targets** with adequate spacing between interactive elements
+
+#### **User Experience Patterns**
+- **Empathetic conversation flow** prioritizing simplicity, clarity, and familiarity
+- **Guided prompting** rather than blank pages (weekly questions → responses)
+- **Family collaboration features** for shared memories and multi-generational input
+- **Easy export functionality** (PDF, Word, JSON) for legacy preservation
+- **Search capabilities** by keywords, people, places, or events with intuitive filters
+
+### Successful Market Examples
+
+Current platforms demonstrate proven patterns:
+
+#### **StoryWorth Model**
+- Weekly email questions to family members
+- Responses compiled into annual hardcover books
+- Subscription-based service with guided prompting
+
+#### **Confinity Digital Heirlooms**
+- Focus on multi-generational legacy preservation
+- Secure legacy vault systems for permanent storage
+- Tailored memory curation with chapter organization
+
+#### **Treeof.me Living Memory Trees**
+- Visual organization of memories into tree structures
+- Private, gentle memory gathering approach
+- Focus on when "words are no longer enough"
+
+#### **Emerging Technologies**
+- **Reflekta "Soul Tech"**: Interactive digital characters of departed loved ones
+- **AI-powered narrative generation** with minimal manual intervention
+- **Constraint-based storytelling** with structured argument relationships
+
+### Implementation Recommendations
+
+Based on industry analysis, our vibe-agents architecture aligns well with best practices:
+
+1. **Dual-agent approach** (empathetic conversation + structured extraction) matches successful patterns
+2. **RAG system** for semantic story retrieval follows modern AI architecture standards
+3. **Firebase authentication** with user isolation meets security requirements
+4. **SSE streaming** provides real-time feedback expected by users
+
+#### **Enhancement Opportunities**
+- **Memory curation chapters**: Implement thematic organization (family, travel, milestones)
+- **Multimedia metadata**: Enhance photo/video support with contextual information
+- **Family collaboration**: Enable multi-user contribution to shared stories
+- **Export diversity**: Add PDF/Word export alongside current JSON format
+- **Accessibility improvements**: Implement font scaling and high contrast modes
+
+### Research Sources
+
+This analysis is based on recent research (2025) including:
+- Academic studies on digital storytelling platform architecture
+- Analysis of memory preservation platforms (Confinity, StoryWorth, Treeof.me)
+- User experience research for elderly users and accessibility requirements
+- Technical architecture studies on narrative data models and vector embeddings
+- Industry best practices for data storytelling and memory aggregation systems
 
 ---
 References:
